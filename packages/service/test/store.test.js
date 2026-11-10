@@ -84,7 +84,7 @@ describe('store', () => {
       for (const n of ['io.x/filesystem', 'io.x/other']) { const r = rec(n, '1'); await tx.run(r.sql, r.params); }
     });
     const rows = await store.read(
-      "SELECT DISTINCT r.name FROM names_fts f JOIN records r ON r.name = f.name WHERE f.name LIKE '%' || ? || '%' ESCAPE '\\'", ['ILE']);
+      "SELECT n.name FROM names n WHERE n.id IN (SELECT rowid FROM names_fts WHERE name LIKE '%' || ? || '%' ESCAPE '\\')", ['ILE']);
     assert.deepStrictEqual(rows.map((r) => r.name), ['io.x/filesystem']);
   });
 
@@ -106,4 +106,50 @@ describe('store', () => {
     await store.write(async (tx) => { const r = rec('a/x', '1'); await tx.run(r.sql, r.params); });
     await assert.rejects(store.write(async (tx) => { const r = rec('a/x', '1'); await tx.run(r.sql, r.params); }), /UNIQUE/);
   });
+  it('refuses a file whose schema is newer than this code knows', async () => {
+    await store.write((tx) => tx.run("UPDATE meta_kv SET v = '99' WHERE k = 'schema_version'"));
+    await store.close();
+    store = null;
+    await assert.rejects(openStore(path.join(dir, 'r.db')), /schema version 99 is newer than this release \(1\)/);
+  });
+
+  it('two stores opening a new file at once migrate it once', async () => {
+    const f = path.join(dir, 'race.db');
+    const [a, b] = await Promise.all([openStore(f), openStore(f)]);
+    assert.strictEqual(await a.schemaVersion(), 1);
+    assert.strictEqual(await b.schemaVersion(), 1);
+    await a.close();
+    await b.close();
+  });
+
+  it('closes its connections when opening fails', async () => {
+    await store.write((tx) => tx.run("UPDATE meta_kv SET v = '99' WHERE k = 'schema_version'"));
+    await store.close();
+    store = null;
+    const fds = () => fs.readdirSync('/proc/self/fd').length;
+    await assert.rejects(openStore(path.join(dir, 'r.db')));
+    const before = fds();
+    for (let i = 0; i < 5; i++) await assert.rejects(openStore(path.join(dir, 'r.db')));
+    assert.strictEqual(fds(), before, 'file descriptors leaked by failed opens');
+  });
+
+  it('keeps names_fts right when a record is renamed', async () => {
+    await store.write(async (tx) => { const r = rec('io.x/abc', '1'); await tx.run(r.sql, r.params); });
+    await store.write((tx) => tx.run("UPDATE records SET name = 'io.x/xyz' WHERE name = 'io.x/abc'"));
+    const rows = await store.read("SELECT n.name FROM names n WHERE n.id IN (SELECT rowid FROM names_fts WHERE name LIKE '%xyz%')");
+    assert.deepStrictEqual(rows.map((r) => r.name), ['io.x/xyz']);
+    const old = await store.read("SELECT count(*) AS n FROM names_fts WHERE name LIKE '%abc%'");
+    assert.strictEqual(old[0].n, 0);
+  });
+
+  it('an upsert of an existing record leaves one names_fts entry', async () => {
+    const up = `INSERT INTO records (source, name, version, server, official, origin, changed_at)
+      VALUES ('mirror', 'io.x/abc', '1', '{}', '{}', 'mirror', ?)
+      ON CONFLICT (name, version) DO UPDATE SET changed_at = excluded.changed_at`;
+    await store.write((tx) => tx.run(up, ['2026-11-10T00:00:00.000Z']));
+    await store.write((tx) => tx.run(up, ['2026-11-11T00:00:00.000Z']));
+    const [row] = await store.read('SELECT count(*) AS n FROM names_fts');
+    assert.strictEqual(row.n, 1);
+  });
 });
+

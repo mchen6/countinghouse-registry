@@ -11,22 +11,34 @@
 
 const LEVELS = ['debug', 'info', 'warn', 'error'];
 const RESERVED = new Set(['t', 'level', 'event', 'msg', 'source']);
+// Names are compared lower-cased with '_' and '-' removed, so registryToken,
+// registry_token and x-api-key all match. Exact names: countinghouse's list plus
+// the registry's own; suffixes catch prefixed forms (accessToken, clientSecret).
 const SECRET_NAMES = new Set([
-  // countinghouse's list
   'apikey', 'appkey', 'key', 'secret', 'token', 'password', 'authorization', 'cookie',
-  // the registry's additions
-  'registry_token', 'signature', 'signed_timestamp', 'privatekey', 'record', 'body', 'tools'
+  'registrytoken', 'signature', 'signedtimestamp', 'privatekey', 'record', 'body', 'tools'
 ]);
+const SECRET_SUFFIXES = ['token', 'secret', 'password', 'apikey', 'privatekey', 'signature', 'signedtimestamp'];
+
+function isSecretName(k) {
+  const n = k.toLowerCase().replace(/[_-]/g, '');
+  return SECRET_NAMES.has(n) || SECRET_SUFFIXES.some((x) => n.endsWith(x));
+}
 const MAX_RECORD_BYTES = 8192;
 const MAX_STRING_BYTES = 2048;
 
+// An Error is logged by name and code only: its message can carry anything
+// (paths, upstream bodies), and the record must not.
 function redact(value, depth) {
   if (depth > 8) return '[depth]';
+  if (value instanceof Error) return value.code ? {name: value.name, code: value.code} : {name: value.name};
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString();
+  if (Buffer.isBuffer(value)) return `[buffer ${value.length} bytes]`;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   if (value !== null && typeof value === 'object') {
     const out = {};
     for (const k of Object.keys(value)) {
-      out[k] = SECRET_NAMES.has(k.toLowerCase()) ? '[redacted]' : redact(value[k], depth + 1);
+      out[k] = isSecretName(k) ? '[redacted]' : redact(value[k], depth + 1);
     }
     return out;
   }
@@ -48,10 +60,17 @@ function cut(value, limit) {
   return value;
 }
 
+// Long strings are cut first; a record still over the bound (many keys, long
+// arrays) keeps its fixed fields and says it was truncated, with its size.
 function serialise(record) {
   let line = JSON.stringify(record);
   for (let limit = MAX_STRING_BYTES; Buffer.byteLength(line) >= MAX_RECORD_BYTES && limit >= 16; limit = Math.floor(limit / 2)) {
     line = JSON.stringify(cut(record, limit));
+  }
+  if (Buffer.byteLength(line) >= MAX_RECORD_BYTES) {
+    const bytes = Buffer.byteLength(JSON.stringify(record));
+    const {t, level, event, msg, source} = record;
+    line = JSON.stringify({t, level, event, msg: cut(msg, MAX_STRING_BYTES), source, truncated: true, bytes});
   }
   return `${line}\n`;
 }

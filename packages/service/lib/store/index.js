@@ -40,55 +40,70 @@ function migrations() {
     .map((f) => ({version: Number(f.slice(0, 3)), sql: fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')}));
 }
 
-async function openStore(file) {
-  const w = wrap(await open(file, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE));
-  await w.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
-  const r = wrap(await open(file, sqlite3.OPEN_READWRITE));
-  await r.exec('PRAGMA busy_timeout = 5000;');
+const LATEST = migrations().reduce((max, m) => Math.max(max, m.version), 0);
 
-  let tail = Promise.resolve();
-  function write(fn) {
-    const result = tail.then(async () => {
-      await w.exec('BEGIN IMMEDIATE');
-      try {
-        const tx = {
-          run: w.run, get: w.get, all: w.all,
-          nextSeq: async () => (await w.get('UPDATE seq SET value = value + 1 WHERE id = 1 RETURNING value')).value
-        };
-        const out = await fn(tx);
-        await w.exec('COMMIT');
-        return out;
-      } catch (err) {
-        await w.exec('ROLLBACK').catch(() => {});
-        throw err;
+async function openStore(file) {
+  const opened = [];
+  try {
+    const w = wrap(await open(file, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE));
+    opened.push(w);
+    await w.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+    const r = wrap(await open(file, sqlite3.OPEN_READWRITE));
+    opened.push(r);
+    await r.exec('PRAGMA busy_timeout = 5000;');
+
+    let tail = Promise.resolve();
+    const write = (fn) => {
+      const result = tail.then(async () => {
+        await w.exec('BEGIN IMMEDIATE');
+        try {
+          const tx = {
+            run: w.run, get: w.get, all: w.all, exec: w.exec,
+            nextSeq: async () => (await w.get('UPDATE seq SET value = value + 1 WHERE id = 1 RETURNING value')).value
+          };
+          const out = await fn(tx);
+          await w.exec('COMMIT');
+          return out;
+        } catch (err) {
+          await w.exec('ROLLBACK').catch(() => {});
+          throw err;
+        }
+      });
+      tail = result.catch(() => {});
+      return result;
+    };
+
+    const versionIn = async (db) => {
+      const exists = await db.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta_kv'");
+      if (!exists) return 0;
+      const row = await db.get("SELECT v FROM meta_kv WHERE k = 'schema_version'");
+      return row ? Number(row.v) : 0;
+    };
+
+    // The version is read inside the write transaction, so two processes opening
+    // a new file at once migrate it once (the second sees the first's commit).
+    await write(async (tx) => {
+      const current = await versionIn(tx);
+      if (current > LATEST) {
+        throw new Error(`store ${file}: schema version ${current} is newer than this release (${LATEST}); refusing to start`);
+      }
+      for (const m of migrations()) {
+        if (m.version <= current) continue;
+        await tx.exec(m.sql);
+        await tx.run("INSERT INTO meta_kv (k, v) VALUES ('schema_version', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", [String(m.version)]);
       }
     });
-    tail = result.catch(() => {});
-    return result;
-  }
 
-  async function schemaVersion() {
-    const exists = await w.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta_kv'");
-    if (!exists) return 0;
-    const row = await w.get("SELECT v FROM meta_kv WHERE k = 'schema_version'");
-    return row ? Number(row.v) : 0;
+    return {
+      read: (sql, params) => r.all(sql, params),
+      write,
+      schemaVersion: () => versionIn(r),
+      close: async () => { await tail; await r.close(); await w.close(); }
+    };
+  } catch (err) {
+    for (const db of opened.reverse()) await db.close().catch(() => {});
+    throw err;
   }
-
-  const current = await schemaVersion();
-  for (const m of migrations()) {
-    if (m.version <= current) continue;
-    await write(async (tx) => {
-      await w.exec(m.sql);
-      await tx.run("INSERT INTO meta_kv (k, v) VALUES ('schema_version', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", [String(m.version)]);
-    });
-  }
-
-  return {
-    read: (sql, params) => r.all(sql, params),
-    write,
-    schemaVersion,
-    close: async () => { await tail; await r.close(); await w.close(); }
-  };
 }
 
 module.exports = {openStore};

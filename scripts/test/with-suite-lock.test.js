@@ -55,4 +55,21 @@ describe('with-suite-lock', () => {
     assert.strictEqual(r.code, 7);
     assert.ok(!fs.existsSync(lockDir()));
   });
+  it('releases the lock when the wrapper itself is told to stop (SIGHUP)', async () => {
+    fs.mkdirSync(path.join(home, 'countinghouse', '.superpowers'), {recursive: true});
+    const child = spawn(process.execPath, [SCRIPT, process.execPath, '-e', 'setTimeout(() => {}, 10000)'],
+      {env: {...process.env, HOME: home}, stdio: 'ignore'});
+    while (!fs.existsSync(path.join(lockDir(), 'owner'))) await new Promise((r) => setTimeout(r, 50));
+    child.kill('SIGHUP');
+    await new Promise((r) => child.on('exit', r));
+    assert.ok(!fs.existsSync(lockDir()), 'lock left behind after SIGHUP');
+  }).timeout(10000);
+
+  it('names its pid in the owner file', async () => {
+    fs.mkdirSync(path.join(home, 'countinghouse', '.superpowers'), {recursive: true});
+    const probe = `process.stdout.write(require('fs').readFileSync(${JSON.stringify(path.join(lockDir(), 'owner'))}, 'utf8'))`;
+    const r = await run(home, [process.execPath, '-e', probe]);
+    assert.match(r.out, /countinghouse-registry implementer, pid \d+/);
+  });
 });
+

@@ -38,10 +38,14 @@ function acquire(done) {
     try {
       fs.mkdirSync(lock);
       held = true;
-      fs.writeFileSync(path.join(lock, 'owner'), `${OWNER}\n`);
+      fs.writeFileSync(path.join(lock, 'owner'), `${OWNER}, pid ${process.pid}, ${new Date().toISOString()}\n`);
       done();
     } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
+      if (err.code !== 'EEXIST') {
+        release();
+        process.stderr.write(`with-suite-lock: ${err.message}\n`);
+        process.exit(3);
+      }
       if (Date.now() - started > MAX_WAIT_MS) {
         process.stderr.write(`with-suite-lock: ${lock} still held after 30 minutes; giving up\n`);
         process.exit(3);
@@ -56,9 +60,28 @@ function acquire(done) {
   attempt();
 }
 
+// Signals that end the wrapper release the lock: forwarded to the child, whose
+// exit releases it; before the child exists, released here. (SIGKILL cannot be
+// caught; the owner line carries the pid so a stale lock can be identified.)
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+let child = null;
+for (const sig of STOP_SIGNALS) {
+  process.on(sig, () => {
+    if (child) child.kill(sig);
+    else {
+      release();
+      process.exit(128 + os.constants.signals[sig]);
+    }
+  });
+}
+process.on('uncaughtException', (err) => {
+  release();
+  process.stderr.write(`with-suite-lock: ${err.message}\n`);
+  process.exit(3);
+});
+
 function runChild() {
-  const child = spawn(cmd, args, {stdio: 'inherit'});
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig));
+  child = spawn(cmd, args, {stdio: 'inherit'});
   child.on('error', (err) => {
     release();
     process.stderr.write(`with-suite-lock: ${err.message}\n`);

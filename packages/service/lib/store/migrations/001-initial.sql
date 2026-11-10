@@ -32,20 +32,41 @@ CREATE TABLE records (
 );
 CREATE INDEX records_changed_at ON records (changed_at);
 
--- Distinct names for substring search (trigram tokenizer: case-insensitive,
--- substrings of three or more characters, LIKE-accelerated).
+-- Distinct names for substring search. `names` holds each name once, keyed by
+-- id; names_fts (trigram tokenizer: case-insensitive, substrings of three or more
+-- characters, LIKE-accelerated) holds the same names under the same rowid, so a
+-- name leaves the index by rowid, never by a scan. Kept in sync by the triggers
+-- below. Records are written with INSERT ... ON CONFLICT DO UPDATE, never
+-- INSERT OR REPLACE (whose implicit delete would bypass the delete trigger).
+CREATE TABLE names (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE
+);
 CREATE VIRTUAL TABLE names_fts USING fts5 (name, tokenize = 'trigram');
 
 CREATE TRIGGER records_name_in AFTER INSERT ON records
-WHEN NOT EXISTS (SELECT 1 FROM records WHERE name = NEW.name AND id <> NEW.id)
+WHEN NOT EXISTS (SELECT 1 FROM names WHERE name = NEW.name)
 BEGIN
-  INSERT INTO names_fts (name) VALUES (NEW.name);
+  INSERT INTO names (name) VALUES (NEW.name);
+  INSERT INTO names_fts (rowid, name) VALUES (last_insert_rowid(), NEW.name);
 END;
 
 CREATE TRIGGER records_name_out AFTER DELETE ON records
 WHEN NOT EXISTS (SELECT 1 FROM records WHERE name = OLD.name)
 BEGIN
-  DELETE FROM names_fts WHERE name = OLD.name;
+  DELETE FROM names_fts WHERE rowid = (SELECT id FROM names WHERE name = OLD.name);
+  DELETE FROM names WHERE name = OLD.name;
+END;
+
+CREATE TRIGGER records_name_renamed AFTER UPDATE OF name ON records
+WHEN OLD.name <> NEW.name
+BEGIN
+  DELETE FROM names_fts WHERE rowid = (SELECT id FROM names WHERE name = OLD.name)
+    AND NOT EXISTS (SELECT 1 FROM records WHERE name = OLD.name);
+  DELETE FROM names WHERE name = OLD.name AND NOT EXISTS (SELECT 1 FROM records WHERE name = OLD.name);
+  INSERT INTO names (name) SELECT NEW.name WHERE NOT EXISTS (SELECT 1 FROM names WHERE name = NEW.name);
+  INSERT INTO names_fts (rowid, name)
+    SELECT id, name FROM names WHERE name = NEW.name AND id NOT IN (SELECT rowid FROM names_fts);
 END;
 
 CREATE TABLE mirror_state (

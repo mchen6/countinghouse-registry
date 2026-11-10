@@ -72,4 +72,34 @@ describe('log', () => {
     const rec = JSON.parse(c.lines[0]);
     assert.match(rec.detail, /…\(20000 bytes\)$/);
   });
+  it('logs Error, Date and Buffer values meaningfully', () => {
+    const c = capture();
+    const log = createLogger({stream: c.stream, now: () => FIXED});
+    const err = Object.assign(new Error('page failed'), {code: 'ECONNRESET'});
+    log.error('x', 'm', {err, at: new Date('2026-01-02T03:04:05.000Z'), raw: Buffer.alloc(300)});
+    const rec = JSON.parse(c.lines[0]);
+    assert.deepStrictEqual(rec.err, {name: 'Error', code: 'ECONNRESET'});
+    assert.strictEqual(rec.at, '2026-01-02T03:04:05.000Z');
+    assert.strictEqual(rec.raw, '[buffer 300 bytes]');
+  });
+
+  it('holds the 8 KB bound for records with many short values', () => {
+    const c = capture();
+    const log = createLogger({stream: c.stream, now: () => FIXED});
+    log.info('x', 'm', {names: Array(5000).fill('io.x/abc')});
+    assert.ok(Buffer.byteLength(c.lines[0]) <= 8192, `record is ${Buffer.byteLength(c.lines[0])} bytes`);
+    const rec = JSON.parse(c.lines[0]);
+    assert.strictEqual(rec.event, 'x');
+    assert.strictEqual(rec.truncated, true);
+  });
+
+  it('redacts camelCase, dashed and prefixed forms of secret names', () => {
+    const c = capture();
+    const log = createLogger({stream: c.stream, now: () => FIXED});
+    log.info('x', 'm', {registryToken: 's1', signedTimestamp: 's2', accessToken: 's3', 'x-api-key': 's4', clientSecret: 's5', keyFp: 'ed25519:abc'});
+    const rec = JSON.parse(c.lines[0]);
+    for (const k of ['registryToken', 'signedTimestamp', 'accessToken', 'x-api-key', 'clientSecret']) assert.strictEqual(rec[k], '[redacted]', k);
+    assert.strictEqual(rec.keyFp, 'ed25519:abc', 'a key fingerprint is not a secret');
+  });
 });
+
