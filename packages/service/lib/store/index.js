@@ -40,6 +40,23 @@ function migrations() {
     .map((f) => ({version: Number(f.slice(0, 3)), sql: fs.readFileSync(path.join(MIGRATIONS_DIR, f), 'utf8')}));
 }
 
+// Switching a new file to WAL needs every other connection out of the way, and
+// SQLite answers SQLITE_BUSY at once there instead of applying busy_timeout (seen
+// when two processes open a new file together). So the switch is retried, up to
+// the same five seconds.
+async function enableWal(db) {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    try {
+      await db.exec('PRAGMA journal_mode = WAL;');
+      return;
+    } catch (err) {
+      if (err.code !== 'SQLITE_BUSY' || Date.now() > deadline) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 10 + Math.floor(Math.random() * 20)));
+    }
+  }
+}
+
 const LATEST = migrations().reduce((max, m) => Math.max(max, m.version), 0);
 
 async function openStore(file) {
@@ -47,7 +64,8 @@ async function openStore(file) {
   try {
     const w = wrap(await open(file, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE));
     opened.push(w);
-    await w.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+    await w.exec('PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
+    await enableWal(w);
     const r = wrap(await open(file, sqlite3.OPEN_READWRITE));
     opened.push(r);
     await r.exec('PRAGMA busy_timeout = 5000;');

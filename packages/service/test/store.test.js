@@ -114,13 +114,17 @@ describe('store', () => {
   });
 
   it('two stores opening a new file at once migrate it once', async () => {
-    const f = path.join(dir, 'race.db');
-    const [a, b] = await Promise.all([openStore(f), openStore(f)]);
-    assert.strictEqual(await a.schemaVersion(), 1);
-    assert.strictEqual(await b.schemaVersion(), 1);
-    await a.close();
-    await b.close();
-  });
+    // Forty pairs: the race (the WAL switch answering SQLITE_BUSY without the
+    // busy timeout) showed up in about 4% of single pairs.
+    for (let i = 0; i < 40; i++) {
+      const f = path.join(dir, `race-${i}.db`);
+      const [a, b] = await Promise.all([openStore(f), openStore(f)]);
+      assert.strictEqual(await a.schemaVersion(), 1);
+      assert.strictEqual(await b.schemaVersion(), 1);
+      await a.close();
+      await b.close();
+    }
+  }).timeout(20000);
 
   it('closes its connections when opening fails', async () => {
     await store.write((tx) => tx.run("UPDATE meta_kv SET v = '99' WHERE k = 'schema_version'"));
