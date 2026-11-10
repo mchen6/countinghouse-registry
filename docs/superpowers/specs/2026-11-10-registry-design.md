@@ -101,7 +101,7 @@ Research §8 is the reference; in short:
 | List parameters | `cursor`, `limit` (default 30, 1–100, otherwise 422), `search`, `updated_since` (RFC 3339, otherwise 400; forces `include_deleted=true`; explicit `include_deleted=false` with it is 400), `version` (`latest` or exact), `include_deleted` (default false). |
 | Search | Case-insensitive substring of `name`; a nonempty value needs ≥3 Unicode characters after trimming, otherwise 422 with upstream's detail text. Backed by an SQLite FTS5 `trigram` table on names. |
 | Order | One record per server version, ordered by `name`, then `version`, ascending, **bytewise** (UTF-8 byte order: SQLite `BINARY`); documented as such. `/versions` is ordered by `publishedAt` descending. |
-| `updated_since` here | Filters on the record's **local change time** `changedAt` (served under our key, 5.2), not on the served `updatedAt`, which stays upstream's for mirrored records. `changedAt` moves on every change applied here (mirror apply, origin change, status overlay, override, local publish or status change), not on hosting-count changes. A deliberate superset: a downstream registry may receive records whose `updatedAt` is older than its checkpoint (it dedupes by name + version) but never misses one that reached us late, e.g. during our first sync. The API docs say so. |
+| `updated_since` here | Filters on the record's **local change time** `changedAt` (served under our key, 5.2), not on the served `updatedAt`, which stays upstream's for mirrored records. `changedAt` moves on every change applied here (mirror apply, origin change, status overlay, override, local publish or status change), not on hosting-count changes. A deliberate superset: a downstream registry may receive records whose `updatedAt` is older than its checkpoint (it dedupes by name + version) but never misses one that reached us late, e.g. during our first sync. The API docs say so. Being a time filter, it keeps upstream's narrow race (a write whose `changedAt` is set before a reader's snapshot but which commits after it); the API docs repeat upstream's advice to downstream syncs to keep a small overlap. The exact, sequence-based watermark is used where we define the contract (9.4). |
 | Cursor | Opaque; its format is the builder's. End of list: `nextCursor` absent. `metadata.count` = records in the page; `metadata` carries nothing else. |
 | Record | `{server: <server.json as stored>, _meta: {"io.modelcontextprotocol.registry/official": {...}, "io.github.mchen6/countinghouse-registry": {...}}}` (section 5). |
 | Status | `deleted` records are hidden unless `include_deleted`; a deleted version is never `isLatest` while a non-deleted version exists. |
@@ -413,7 +413,8 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
   content, 409 different content (immutable per name@version), 422 if it is
   not a valid record (its own JSON Schema, 2020-12: closed envelope; tool
   items as in 9.4; `permissions` any object, since countinghouse-validate
-  has already checked it). Response: `{sha256}`.
+  has already checked it). Body caps as 9.4: 1 MiB, 500 tools, else 413.
+  Response: `{sha256}`.
 - `GET records/{name}/versions/{version}` (public): the record as stored.
 
 Records exist only for local names (claimed namespaces). Tool lists taken
@@ -477,11 +478,18 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
 ### 9.4 Instance endpoints (instance JWT for that instance)
 
 - `GET instances/{instance}/enabled?since=<watermark>&cursor=...`: entries
-  whose enable state, record status or notices changed since the watermark;
-  paginated like the read API (limit ≤100). Every response carries
-  `nextSince`, the registry's own time at the start of the query; the gateway
-  sends it back as `since` on its next poll (omitted on the first), so clock
-  differences between the two hosts lose nothing **(implementer's call)**.
+  whose enable state, result, record status or notices changed after the
+  watermark; paginated like the read API (limit ≤100). The watermark is a
+  **change sequence**, not a time: every change to an enable, a result, a
+  record's status or a notice takes the next value of one monotonic counter
+  inside its write transaction. SQLite has a single writer, so sequence order
+  is commit order, and a read snapshot always sees a prefix of the sequence.
+  Every response carries `nextSince`, the highest sequence in the snapshot;
+  the gateway sends it back as `since` on its next poll (omitted on the
+  first). Exact: no overlap, no clocks, no race between a write that started
+  before a read and committed after it. The value is opaque to the gateway
+  (a decimal string). Registry-issued watermark: **(implementer's call)**;
+  sequence instead of time: the reviewer's correction.
   Each item: `{name, version, state: "requested"|"validated"|"changed"|"failed"|"disabled",
   remote: <the chosen remote object from server.json>, status: <official
   status>, notices: ["upstream-deprecated"|"upstream-deleted"|"gone-upstream"|"conflict"|"tools-changed"],
@@ -496,9 +504,14 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
   - `changed`: the gateway found a tool list different from the one it
     validated before, **stopped serving** the entry (countinghouse's rule: a
     changed tool list is a changed contract), and posts the new `tools` with
-    `previousSha256`. State becomes `changed`; the entry leaves
+    `previousSha256`. Accepted in state `validated` (idempotent in
+    `changed`). State becomes `changed`; the entry leaves
     `hosting.instances`; the operator gets a `tools-changed` notice; a
-    re-enable (9.3) sends the gateway to validate afresh.
+    re-enable (9.3) sends the gateway to validate afresh. What produces it on
+    the gateway's side (R1): the gateway re-takes `tools/list` for every
+    served entry on a schedule (default hourly) and on every reconnect,
+    compares it with the validated one by the shared hash, and posts
+    `changed` on a difference.
   - `failed`: requires `reason` from `unreachable | auth-rejected |
     protocol-error | invalid-tools-list | timeout | other`, and no `tools`.
     Accepted in any enabled state; a validated entry that fails leaves
@@ -518,6 +531,10 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
     Tool shape varies by protocol revision and these are the listed server's
     own public `tools/list` **(implementer's call)**.
   - 409 if the entry is `disabled` or not enabled for that instance.
+- **Body caps** (here and on `PUT records/...`, 8.4): a JSON body of at most
+  1 MiB and at most 500 `tools` items; over either → 413 problem+json. A
+  compromised instance or publisher key must not be able to fill the store.
+  (Mirrored `server` objects are bounded by upstream already.)
 
 ### 9.5 Timing and retries
 
@@ -548,7 +565,10 @@ limiting needs in memory.
   `namespaces` are claimed namespaces the key may publish into; `operate`
   allows the operator endpoints (enable, overrides, conflicts, sync now).
 - **Instance keys**: each entry `{instance, algorithm, publicKey}`.
-- Revocation = removing a key from config and restarting.
+- Revocation = removing a key from config and restarting. That stops new
+  exchanges at once; tokens already issued stay valid until they expire, so
+  revocation takes full effect within 5 minutes of the restart (10.3). The
+  operator docs say so.
 
 ### 10.2 Exchanges
 
@@ -650,8 +670,10 @@ record schema) lives in the CLI package and is required by the service
 
 Run by the author before `npm publish` (e.g. `npx countinghouse-registry-cli generate .`):
 
-1. Runs `countinghouse-validate --json` on the directory (countinghouse
-   resolved from the module's own install); any problem → exit 1 with the
+1. Runs `countinghouse-validate --json` on the directory, with countinghouse
+   resolved from the module's own install: the author has countinghouse as
+   a `devDependency` alongside the peer dependency (N1's scaffold adds both);
+   if it cannot be resolved → exit 2 saying so. Any problem → exit 1 with the
    problems.
 2. Checks `package.json`: `mcpName` present and valid, strict semver
    `version`, `description` ≤100 characters (else exit 1 asking for one; no
@@ -831,7 +853,8 @@ The implementer's calls in this spec (each changeable at review):
 6. `sse` remotes not enableable in version 1 (9.3).
 7. Failure reason codes for results (9.4) and mirror error codes (6.5).
 8. Backoff parameters: 5 s base, full jitter, capped at the interval (6.4).
-9. The gateway poll watermark `nextSince` issued by the registry (9.4).
+9. The gateway poll watermark `nextSince` issued by the registry (9.4); its
+   form, a change sequence rather than a time, is the reviewer's correction.
 10. Tool items in results and records: `name` and `inputSchema` required,
     otherwise open; `permissions` any object (8.4, 9.4).
 11. Shared code lives in the CLI package and is required by the service
@@ -840,3 +863,23 @@ The implementer's calls in this spec (each changeable at review):
     startup on removal with local records (13.3).
 13. Copies from countinghouse at a pinned commit; countinghouse never a
     service dependency (14).
+
+## 18. Later (not version 1)
+
+Listed so the roadmap is visible; none of it is built in version 1.
+
+- **Tool-surface scan**: a rules-based scan of a `tools/list` (injection
+  phrases, requests for secrets, hidden instructions), run on enable, on every
+  `changed`, and before publish, with one rules file shared with
+  countinghouse-validate under the copy rule.
+- **Read-API conformance monitor**: a scheduled job (GitHub Actions cron)
+  replaying a sample of requests against the official registry and a
+  deployed instance, with the diff kept as an artifact.
+- **`connect` command**: prints connection snippets per MCP client for an
+  entry.
+- **`status` command**: joins the registry's validation state with gateway
+  health and usage.
+- **Author self-publishing**, with the package-ownership check restored
+  (7.5).
+- **Supply-chain recording** (digest, provenance result) once package
+  entries are hosted.
