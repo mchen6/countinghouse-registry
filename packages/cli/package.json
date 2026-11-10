@@ -1,0 +1,29 @@
+{
+  "name": "countinghouse-registry-cli",
+  "version": "0.1.0",
+  "description": "Generate, publish and operate countinghouse-registry entries for countinghouse modules",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mchen6/countinghouse-registry.git",
+    "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">=24.15"
+  },
+  "bin": {
+    "countinghouse-registry-cli": "./bin/countinghouse-registry-cli.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "schemas/"
+  ],
+  "scripts": {
+    "test": "mocha --recursive 'test/**/*.test.js'"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}

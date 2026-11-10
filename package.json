@@ -1,0 +1,27 @@
+{
+  "name": "countinghouse-registry-workspace",
+  "private": true,
+  "description": "countinghouse-registry: an MCP Registry-compatible registry that can host what it lists",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mchen6/countinghouse-registry.git"
+  },
+  "engines": {
+    "node": ">=24.15"
+  },
+  "workspaces": [
+    "packages/cli",
+    "packages/service"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node scripts/with-suite-lock.js npm run test:all",
+    "test:all": "mocha 'scripts/test/**/*.test.js' && npm test --workspaces"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "mocha": "^11.8.0",
+    "supertest": "^7.2.2"
+  }
+}
