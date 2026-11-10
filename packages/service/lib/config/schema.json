@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mchen6/countinghouse-registry/config.schema.json",
+  "title": "countinghouse-registry service configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["store"],
+  "properties": {
+    "listen": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "host": {"type": "string", "minLength": 1, "default": "127.0.0.1"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 9800},
+        "trustProxy": {"type": "boolean", "default": false}
+      }
+    },
+    "store": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1}
+      }
+    },
+    "secret": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "file": {"type": "string", "minLength": 1}
+      }
+    },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "url": {"type": "string", "pattern": "^https?://[^\\s/]+(/[^\\s]*)?$", "default": "https://registry.modelcontextprotocol.io"},
+        "intervalMinutes": {"type": "integer", "minimum": 10, "default": 60},
+        "reconcile": {
+          "type": "object",
+          "additionalProperties": false,
+          "default": {},
+          "properties": {
+            "everyDays": {"type": "integer", "minimum": 1, "default": 7},
+            "atHour": {"type": "integer", "minimum": 0, "maximum": 23, "default": 3}
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "default": [],
+      "items": {"$ref": "#/$defs/namespace"}
+    },
+    "publisherKeys": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "algorithm", "publicKey"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"},
+          "algorithm": {"$ref": "#/$defs/algorithm"},
+          "publicKey": {"$ref": "#/$defs/base64"},
+          "domains": {"type": "array", "default": [], "items": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"}},
+          "namespaces": {"type": "array", "default": [], "items": {"$ref": "#/$defs/namespace"}},
+          "operate": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    "instances": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["instance", "algorithm", "publicKey"],
+        "properties": {
+          "instance": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+          "algorithm": {"$ref": "#/$defs/algorithm"},
+          "publicKey": {"$ref": "#/$defs/base64"}
+        }
+      }
+    },
+    "publicHosting": {"enum": ["aggregate", "none"], "default": "aggregate"}
+  },
+  "$defs": {
+    "namespace": {"type": "string", "pattern": "^[a-zA-Z0-9.-]+/$"},
+    "algorithm": {"enum": ["ed25519", "ecdsa-p384"]},
+    "base64": {"type": "string", "pattern": "^[A-Za-z0-9+/]+={0,2}$"}
+  }
+}
