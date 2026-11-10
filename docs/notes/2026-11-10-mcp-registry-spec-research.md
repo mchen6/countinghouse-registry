@@ -564,12 +564,11 @@ and needed only to accept `mcp-publisher`.
 
 ### What we add (allowed by the specs)
 
-`DECISIONS.md` (2026-11-10) says "countinghouse-specific data goes only in the
-schema's extension fields". Of the three places below, only the first is an
-extension field of a published schema, and it belongs to the API response
-schema, not to server.json. So every placement except a pointer inside
-server.json's `_meta` needs the maintainer to confirm it before the spec
-relies on it. The upstream specs allow all three.
+Settled in `DECISIONS.md` (2026-11-10, clarified the same day): countinghouse
+data changes no standard shape and uses only the standard's extension points:
+server.json `_meta` (`publisher-provided` for anything meant to survive a push
+upstream), response-level `_meta` under our own key, and extension endpoints
+under `/v0.1/x/<namespace>/`. The upstream specs allow all three.
 
 - **Response-level `_meta` under our own reverse-DNS key** (OpenAPI
   `ServerResponse._meta` has `additionalProperties: true`): what our registry
@@ -579,8 +578,7 @@ relies on it. The upstream specs allow all three.
 - **Extension endpoints under `/v0.1/x/<our namespace>/…`**: anything that is
   not a standard read, e.g. fetching the full countinghouse record of a
   version. Clients must tolerate their absence, so nothing standard may
-  depend on them. This is an API extension, not a schema extension field, so
-  it goes beyond the wording of `DECISIONS.md` and needs a decision.
+  depend on them.
 - **Our own publishing auth** (operator token): the generic spec leaves the
   mechanism to the registry.
 
@@ -593,10 +591,8 @@ to fit `_meta["io.modelcontextprotocol.registry/publisher-provided"]` within
 `tools/list` carries every tool's description and input schema; beyond a
 handful of tools it will not fit in 4 KB (not measured here; the spec should
 measure it against countinghouse's existing goldens), so it cannot reliably
-travel in server.json. That leads to a split
-(proposed by the reviewer; to be settled in the spec, together with the
-`DECISIONS.md` question above, since the full record would live outside
-server.json):
+travel in server.json. Hence the split recorded in `DECISIONS.md`
+(2026-11-10):
 
 - **In our registry**: the full countinghouse record (validated tool surface,
   permissions, pricing, composition targets) stored per server version and
@@ -606,8 +602,11 @@ server.json):
   well under 4 KB, so it survives both registries and lets any reader fetch
   and verify the full record.
 
-Records mirrored from the official registry carry no countinghouse data
-except what we compute ourselves (response-level `_meta`).
+Records mirrored from the official registry carry no publisher-side
+countinghouse data. What we add to them is computed here — e.g. the
+validation result and golden recorded when an operator enables the entry
+through countinghouse (`DECISIONS.md`, "no import step") — and served in
+response-level `_meta` or an extension endpoint.
 
 ## Catalogue snapshot (measured 2026-11-10, official registry v1.8.9)
 
