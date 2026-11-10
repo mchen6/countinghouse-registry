@@ -39,7 +39,10 @@ Paths below are relative to the registry repository unless stated.
   otherwise; `official-registry-api.md` says "This restriction changes
   previously accepted one- and two-character searches"); allowed several server
   names to share one remote URL (API changelog "Unreleased", marked
-  ⚠️ BREAKING for consumers that index by URL); added status endpoints and
+  ⚠️ BREAKING for consumers that index by URL — **deployed**: the 2026-11-10
+  crawl of v1.8.9 finds 98 remote URLs listed under more than one server name,
+  e.g. `https://t0ll.xyz/mcp` under `xyz.t0ll/toll` and
+  `io.github.t0ll-xyz/toll`); added status endpoints and
   `statusMessage`/`statusChangedAt` (additive).
 - **server.json moves by dated schema versions.** Seven published versions in
   five months of 2025, none in 2026. The draft adds one relaxation (transport
@@ -135,6 +138,10 @@ PostgreSQL, i.e. the database collation, not byte order and not semver).
   "metadata": { "nextCursor": "ac.mizan/registry:1.2.0", "count": 2 }
 }
 ```
+
+(Response to `?limit=2&version=latest`, abridged: the first of the two
+records, `ac.inference.sh/mcp`, is left out, so `count` is 2 while one record
+is shown. `count` is the number of records in the page.)
 
 - `ServerResponse` = `{ server: ServerDetail, _meta: { … } }`. The
   `ServerDetail` is the published server.json. The response-level `_meta` is
@@ -234,7 +241,10 @@ is an error; a non-current version is handled by policy (error / warn / allow).
 | `_meta` | object; only `io.modelcontextprotocol.registry/publisher-provided` is defined |
 
 A server may have packages, remotes, both, or (schema-wise) neither; issue
-#1579 reports 387 active official entries with neither.
+#1579 (August 2026, 82 994 version records then) reports 387 active server
+names with neither; the 2026-11-10 crawl finds 1 959 version records with
+neither, belonging to 846 names, of which 665 have an active latest version
+(see the snapshot at the end).
 
 ### Package entries ("run it locally")
 
@@ -405,8 +415,11 @@ authorization on top of scopes.
    - `POST /v0.1/auth/http` — same proof at
      `https://<domain>/.well-known/mcp-registry-auth` → that domain only.
    - `POST /v0.1/auth/oidc` — Google OIDC, admins.
-   - `POST /v0/auth/none` — anonymous, only when `EnableAnonymousAuth`
+   - `POST /v0.1/auth/none` — anonymous, only when `EnableAnonymousAuth`
      (development/test), grants `io.modelcontextprotocol.anonymous/*`.
+   All exchanges are registered under both `/v0` and `/v0.1`
+   (`internal/api/router/v0.go`, `RegisterAuthEndpoints`), as are publish,
+   validate, edit, status, health, ping and version.
 2. The JWT carries permissions `{action: publish|edit, resourcePattern}`;
    calls send `Authorization: Bearer <JWT>`.
 3. On publish the server checks the namespace permission, validates
@@ -460,9 +473,13 @@ These follow from the sources above; the choices are for the spec.
    `mcp-publisher` only speaks `/v0`.
 2. **Errors as `application/problem+json`** to match production, not the
    OpenAPI text.
-3. **Opaque cursors** are allowed; the official `name:version` form and its
-   collation-dependent order need not be copied, but the sort keys (name, then
-   version as text) and per-version records should be.
+3. **Opaque cursors** are allowed, so the official `name:version` form need
+   not be copied. The sort keys (name, then version, ascending as strings) and
+   per-version records should be. The exact string collation is not specified
+   anywhere: the official registry gets PostgreSQL's database collation, while
+   SQLite's default `BINARY` puts upper-case before lower-case. Clients can only
+   rely on the keys, not on the collation, so the spec should pick one and
+   document it.
 4. **Schema dialect mismatch with our stack.** server.json is draft-07 today
    and may become 2020-12 (#842). countinghouse validates with ajv 8 in
    2020-12 mode; ajv needs a separate instance per dialect (`ajv` for
@@ -503,12 +520,22 @@ These follow from the sources above; the choices are for the spec.
     deployed rule (the code's `CompareVersions`, verified live above), not the
     sentence in `versioning.mdx`; for mirrored records, keep upstream's
     `isLatest`.
-11. **countinghouse module as a package entry**: `registryType: "npm"` with
-    `transport: stdio` and `runtimeHint: "npx"` plus `runtimeArguments` can
-    express the `npx countinghouse --loadModule` run form; the official
-    registry would additionally require `mcpName` in the module's
-    `package.json`. A hosted instance is a `remotes[]` entry
-    (`streamable-http`, likely with a key header marked `isSecret`).
+11. **countinghouse module as a package entry: an open problem.** With
+    `registryType: "npm"`, `identifier` is the package the client runs
+    (`npx <identifier> <packageArguments>`). The run form
+    `npx countinghouse --loadModule <module>` therefore makes
+    `identifier = "countinghouse"`, with the module in `packageArguments`. The
+    official registry's ownership check then reads `mcpName` from
+    *countinghouse's* `package.json`, which can match only one server name, so
+    no module could pass it. The alternative, `identifier = <module package>`,
+    passes the check (the module's `package.json` carries `mcpName`), but the
+    client runs the module package's own `bin`. That works only if each module
+    ships a bin that starts countinghouse with itself loaded. The spec has to
+    choose (or use only `remotes` for the official registry); nothing in the
+    official schema expresses "run package A to host package B".
+    A hosted instance is a `remotes[]` entry (`streamable-http`, likely with a
+    key header marked `isSecret`), and remote-only entries need no package
+    ownership check.
 
 ## 8. What a compatible registry must reproduce vs what we add
 
@@ -522,7 +549,7 @@ client or subregistry that reads the official registry to read ours.
 | Read paths | `GET /v0.1/servers`, `GET /v0.1/servers/{name}/versions`, `GET /v0.1/servers/{name}/versions/{version}` with `latest`; URL-encoded path segments (`%2F` in names, `%2B` in versions) |
 | List parameters | `cursor`, `limit` (default 30, max 100), `search` (case-insensitive substring on name, ≥3 chars else 422), `updated_since` (RFC 3339, else 400; implies `include_deleted=true`, 400 if explicitly false), `version` (`latest` or exact), `include_deleted` |
 | Pagination | opaque `metadata.nextCursor`; end of list when it is null, empty or absent; `metadata.count` = items in the page; the same filters apply across pages |
-| Records | one record per server version; `{server: <server.json as published>, _meta: {"io.modelcontextprotocol.registry/official": {status, statusMessage?, statusChangedAt, publishedAt, updatedAt, isLatest}}}`; list order by name then version (text); `/versions` by `publishedAt` descending |
+| Records | one record per server version; `{server: <server.json as published>, _meta: {"io.modelcontextprotocol.registry/official": {status, statusMessage?, statusChangedAt, publishedAt, updatedAt, isLatest}}}`; list order by name, then version, ascending as strings (collation not specified; see section 7 item 3); `/versions` by `publishedAt` descending |
 | Status semantics | `active` / `deprecated` / `deleted`; deleted hidden unless `include_deleted`; a deleted version never `latest` while a non-deleted one exists |
 | Errors | `application/problem+json` `{title, status, detail}` as production sends it (section 2), with the same codes: 400 bad parameter or encoding, 404 `"Server not found"`, 422 short search |
 | Accepted schema | server.json `$schema` = `https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json`, **draft-07** dialect, validated by the document's `$schema` URL; older published versions by policy (official: error/warn/allow); a 2020-12 version must be expected (#842) |
@@ -537,6 +564,13 @@ and needed only to accept `mcp-publisher`.
 
 ### What we add (allowed by the specs)
 
+`DECISIONS.md` (2026-11-10) says "countinghouse-specific data goes only in the
+schema's extension fields". Of the three places below, only the first is an
+extension field of a published schema, and it belongs to the API response
+schema, not to server.json. So every placement except a pointer inside
+server.json's `_meta` needs the maintainer to confirm it before the spec
+relies on it. The upstream specs allow all three.
+
 - **Response-level `_meta` under our own reverse-DNS key** (OpenAPI
   `ServerResponse._meta` has `additionalProperties: true`): what our registry
   knows about a record — origin (mirrored from official vs published here),
@@ -545,7 +579,8 @@ and needed only to accept `mcp-publisher`.
 - **Extension endpoints under `/v0.1/x/<our namespace>/…`**: anything that is
   not a standard read, e.g. fetching the full countinghouse record of a
   version. Clients must tolerate their absence, so nothing standard may
-  depend on them.
+  depend on them. This is an API extension, not a schema extension field, so
+  it goes beyond the wording of `DECISIONS.md` and needs a decision.
 - **Our own publishing auth** (operator token): the generic spec leaves the
   mechanism to the registry.
 
@@ -559,7 +594,9 @@ to fit `_meta["io.modelcontextprotocol.registry/publisher-provided"]` within
 handful of tools it will not fit in 4 KB (not measured here; the spec should
 measure it against countinghouse's existing goldens), so it cannot reliably
 travel in server.json. That leads to a split
-(proposed by the reviewer; to be settled in the spec):
+(proposed by the reviewer; to be settled in the spec, together with the
+`DECISIONS.md` question above, since the full record would live outside
+server.json):
 
 - **In our registry**: the full countinghouse record (validated tool surface,
   permissions, pricing, composition targets) stored per server version and
@@ -593,7 +630,7 @@ crawl may be missing, which is what the incremental sync is for.
 | Records with neither packages nor remotes | 1 959 |
 | `$schema` versions in use | 2025-12-11: 226 789; 2025-09-29: 6 641; 2025-10-17: 3 520; 2025-07-09: 1 930; 2025-09-16: 399; 50 others (URL with a fragment, or not a static URL) |
 | Records with a `server._meta` | 9 470; 8 671 of them with `publisher-provided` |
-| `publisher-provided` size (compact JSON, ASCII-escaped) | median 343 bytes, p99 4 083, max 4 105 (non-ASCII escaping makes this count slightly larger than Go's) |
+| `publisher-provided` size, measured as Go's `json.Marshal` counts it (compact, UTF-8, `<` `>` `&` escaped) | median 343 bytes, p99 4 079, max **4 095**: every record is within the 4 096-byte limit, and some publishers fill it to the byte |
 | Other keys in `server._meta` | none (consistent with the drop rule) |
 | Keys in response-level `_meta` | only `io.modelcontextprotocol.registry/official` |
 | Volume | ~256 MB of compact JSON, ~1 070 bytes per record on average |
@@ -608,5 +645,9 @@ What this means for the spec's mirroring section:
   2025-12-11), so mirroring should store records as served, not re-validate them
   against the current schema.
 - About 240 000 records of ~1 KB fit a single SQLite file comfortably
-  (~¼ GB of JSON before indexes); the store needs indexes on (name, version),
-  name substring and `updatedAt`.
+  (~¼ GB of JSON before indexes). The store needs B-tree indexes on
+  (name, version) and `updatedAt`. The case-insensitive substring `search`
+  cannot use a B-tree index (`LIKE '%abc%'` scans): either accept a scan of
+  ~61 000 names (names only, not the JSON) or add an FTS5 `trigram` table. The
+  trigram tokenizer matches substrings of ≥3 characters, which is exactly the
+  official minimum.
