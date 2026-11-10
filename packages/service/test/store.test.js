@@ -35,6 +35,11 @@ describe('store', () => {
     assert.strictEqual(row.journal_mode, 'wal');
   });
 
+  it('the read connection cannot write', async () => {
+    await assert.rejects(store.read("INSERT INTO meta_kv (k, v) VALUES ('x', 'y')"), /SQLITE_READONLY/);
+    assert.deepStrictEqual(await store.read("SELECT v FROM meta_kv WHERE k = 'x'"), []);
+  });
+
   it('write commits and read sees it', async () => {
     await store.write(async (tx) => { const r = rec('a/x', '1'); await tx.run(r.sql, r.params); });
     const rows = await store.read('SELECT name FROM records');

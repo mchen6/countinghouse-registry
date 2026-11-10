@@ -66,7 +66,7 @@ async function openStore(file) {
     opened.push(w);
     await w.exec('PRAGMA busy_timeout = 5000; PRAGMA foreign_keys = ON;');
     await enableWal(w);
-    const r = wrap(await open(file, sqlite3.OPEN_READWRITE));
+    const r = wrap(await open(file, sqlite3.OPEN_READONLY));
     opened.push(r);
     await r.exec('PRAGMA busy_timeout = 5000;');
 

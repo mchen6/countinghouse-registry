@@ -2,7 +2,7 @@
 // The log record: one JSON object per line, {t, level, event, msg, source, ...fields}.
 // The record definition is copied from countinghouse's logging design
 // (github.com/mchen6/countinghouse docs/superpowers/specs/2026-11-09-logger-design.md,
-// section 3, at c085892d98a0e5fe3394940be660fa9072fd5def), so an operator running
+// section 3, at master be06ba458783704e162035b2d2589e3515ba95a6), so an operator running
 // both reads one format: the same field names, the same 8 KB bound, and the same
 // field-name backstop for secrets (values of secret-named fields become
 // "[redacted]" at any depth). The registry adds its own secret names (tokens,
