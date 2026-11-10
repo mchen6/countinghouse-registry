@@ -32,21 +32,24 @@ progress), the metering provider, and the approved logger/errors design.
 - The out-of-process host for servers in other languages (the "mcp-proxy"
   module in front of a container or child process; see countinghouse's
   `docs/superpowers/notes/2026-11-10-multi-language-modules-brainstorm.md`).
-- Import: pull by the operator, validate `tools/list`, record a golden,
-  register as a module.
+- Enable: an entry of the mirrored catalogue is enabled by the operator and
+  served by the countinghouse gateway at once; `tools/list` is validated and
+  the golden recorded automatically on enable. No import step exists.
+  Remote entries: the gateway as an MCP client (early). Package entries: the
+  out-of-process host (later).
 - Migration tooling: generate `api.json`/`schema.json` from a server's
   `tools/list` (MCP tool schemas map onto them nearly one-to-one), and use
   the recorded golden as the migration's regression test.
 - Hosting status and a bill per hosted entry, which needs countinghouse's
   P2 usage records.
 
-## Migration path (composition makes it natural)
+## Migration path (optional, later; composition makes it natural)
 
-1. Wrap: the server runs as is behind the proxy; it gains keys, metering,
-   audit.
-2. Hybrid: a composite module reimplements some tools natively and calls
-   the rest through the proxy; callers see one surface.
-3. Native: the proxy is retired.
+1. Enabled as is: the server is served through the gateway; it gains keys,
+   metering, audit. This is the normal state, not a migration step.
+2. Hybrid: a composite module reimplements some tools natively and serves
+   the rest through the enabled entry; callers see one surface.
+3. Native: the entry is retired.
 
 ## Prerequisites and order
 

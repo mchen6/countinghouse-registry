@@ -12,9 +12,18 @@
   Node service, not a countinghouse module (it may move into one once
   countinghouse's out-of-process host exists); publishing is operator-only in
   version 1 (author self-publishing with review later).
-- 2026-11-10: version 1 scope: the compatible read API, a metadata store,
-  mirroring of the official catalogue, `server.json` validation on publish,
-  the countinghouse extension fields, and a generator that emits `server.json`
-  for a countinghouse module. Not in version 1: hosting or importing foreign
-  servers and migration tooling (they wait on countinghouse's R2-1, the
-  out-of-process host and P2 usage records).
+- 2026-11-10 (the maintainer, correcting an earlier wording): there is no
+  "import" of existing servers. Every server on the official registry is in
+  this one by mirroring and usable by any MCP client at once; and usable
+  through countinghouse itself at once, the operator enabling an entry and
+  the gateway serving it with keys, metering and audit, validation and the
+  golden recorded automatically on enable. Migration to a native module is
+  optional and later.
+- 2026-11-10: version 1 scope, in that light: mirroring of the official
+  catalogue as the core; the compatible read API; a metadata store;
+  `server.json` validation on publish; the countinghouse extension fields; a
+  generator that emits `server.json` for a countinghouse module; and "enable
+  through countinghouse" for **remote** entries (the gateway as an MCP
+  client). Package entries (npm, PyPI, Docker) through countinghouse follow
+  the out-of-process host on the countinghouse side; hosted-entry billing
+  follows P2 usage records.

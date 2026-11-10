@@ -21,16 +21,25 @@ metering, identity hand-off, audit and a validated tool contract.
 
 ## What it supports
 
-- **countinghouse modules**, advertised as registry entries (npm package plus
-  the `npx countinghouse --loadModule` run form, or a hosted remote).
-- **Existing MCP servers in any language**, imported through countinghouse's
-  out-of-process host: the operator pulls the package or image, the registry
-  validates its `tools/list` and records a golden, and the gateway serves it
-  as a module.
-- **Gradual migration** from an imported server to a native module: wrap it
-  as is; then a composite module reimplements some tools and proxies the
-  rest; then the proxy is retired. The recorded tool surface is the
-  regression test throughout.
+- **Every server on the official MCP Registry, with no import step.** The
+  catalogue is mirrored, entry for entry, so any MCP client that can use the
+  official registry can use this one today. The registry *is* the catalogue;
+  there is no "import" of a server into it.
+- **Those servers usable through countinghouse itself, immediately.** The
+  operator enables an entry and countinghouse serves its tools through its
+  gateway, with per-key access, metering, identity hand-off and audit, with
+  no conversion and no manual ceremony: the tool surface is validated and its
+  golden recorded automatically when the entry is enabled. Remote entries (a
+  URL) need only the gateway acting as an MCP client; package entries (npm,
+  PyPI, Docker) need countinghouse to run them out of process, which follows
+  the countinghouse work it depends on.
+- **countinghouse modules**, listed alongside them (npm package plus the
+  `npx countinghouse --loadModule` run form, or a hosted remote), and
+  countinghouse deployments themselves as entries.
+- **Migration to a native module, optional and later**: a composite module
+  reimplements some tools and serves the rest through the enabled entry;
+  then the entry is retired. The recorded tool surface is the regression
+  test throughout.
 
 ## Relationship to countinghouse
 
