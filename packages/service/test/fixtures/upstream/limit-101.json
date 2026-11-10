@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/servers?limit=101",
+  "status": 422,
+  "headers": {
+    "content-type": "application/problem+json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "title": "Unprocessable Entity",
+    "status": 422,
+    "detail": "validation failed",
+    "errors": [
+      {
+        "message": "expected number <= 100",
+        "location": "query.limit",
+        "value": 101
+      }
+    ]
+  }
+}

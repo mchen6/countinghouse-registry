@@ -1,0 +1,52 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/servers/ac.mizan%2Fregistry/versions",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "servers": [
+      {
+        "server": {
+          "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+          "name": "ac.mizan/registry",
+          "description": "Player ban records from 560+ game community ban lists, with Steam's own bans. Reads need no key.",
+          "title": "Mizan",
+          "version": "1.2.0",
+          "websiteUrl": "https://mizan.ac/capabilities",
+          "icons": [
+            {
+              "src": "https://mizan.ac/icon-512.png",
+              "mimeType": "image/png",
+              "sizes": [
+                "512x512"
+              ]
+            }
+          ],
+          "remotes": [
+            {
+              "type": "streamable-http",
+              "url": "https://mizan.ac/mcp"
+            }
+          ]
+        },
+        "_meta": {
+          "io.modelcontextprotocol.registry/official": {
+            "status": "active",
+            "statusChangedAt": "2026-11-05T23:35:33.188176Z",
+            "publishedAt": "2026-11-05T23:35:33.188176Z",
+            "updatedAt": "2026-11-05T23:35:33.188176Z",
+            "isLatest": true
+          }
+        }
+      }
+    ],
+    "metadata": {
+      "count": 1
+    }
+  }
+}

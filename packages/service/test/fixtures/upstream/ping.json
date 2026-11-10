@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/ping",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "pong": true
+  }
+}

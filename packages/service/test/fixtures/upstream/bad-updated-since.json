@@ -1,0 +1,16 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/servers?updated_since=yesterday",
+  "status": 400,
+  "headers": {
+    "content-type": "application/problem+json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "Invalid updated_since format: expected RFC3339 timestamp (e.g., 2025-08-07T13:15:04.280Z)"
+  }
+}

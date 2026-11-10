@@ -1,0 +1,16 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/servers/nope%2Fnope/versions",
+  "status": 404,
+  "headers": {
+    "content-type": "application/problem+json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "title": "Not Found",
+    "status": 404,
+    "detail": "Server not found"
+  }
+}

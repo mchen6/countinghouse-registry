@@ -1,0 +1,16 @@
+{
+  "recordedAt": "2026-11-10T22:57:57.478Z",
+  "upstreamVersion": "1.8.9",
+  "path": "/v0.1/version",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-expose-headers": "Content-Type, Content-Length"
+  },
+  "body": {
+    "version": "1.8.9",
+    "git_commit": "ba94f657e1ecd4ddff11baa25ad84cda26c2b854",
+    "build_time": "2026-11-10T11:14:06Z"
+  }
+}
