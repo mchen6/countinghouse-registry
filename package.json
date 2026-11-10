@@ -17,7 +17,7 @@
   "scripts": {
     "lint": "eslint .",
     "test": "node scripts/with-suite-lock.js npm run test:all",
-    "test:all": "mocha 'scripts/test/**/*.test.js' && npm test --workspaces"
+    "test:all": "mocha 'scripts/test/**/*.test.js' && npm test --workspaces --if-present"
   },
   "devDependencies": {
     "eslint": "^9.39.5",
