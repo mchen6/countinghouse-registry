@@ -5,8 +5,17 @@
   npm is the marketplace") stands unchanged for the runtime. The registry
   is metadata only: it never fetches or stores code and never moves money.
 - 2026-11-10: 100% compatibility with the official MCP Registry API and
-  `server.json` schema is a hard requirement; countinghouse-specific data
-  goes only in the schema's extension fields.
+  `server.json` schema is a hard requirement. Countinghouse-specific data
+  changes no standard shape and breaks no standard client: it uses only the
+  standard's extension points, namely `server.json` `_meta` (the
+  publisher-provided namespace for anything meant to survive a push to the
+  official registry, which keeps only that namespace and caps it at
+  4096 bytes), response-level `_meta` under our own key, and extension
+  endpoints namespaced under `/v0.1/x/<namespace>/`. The full countinghouse
+  record of an entry (its validated tool surface and more) therefore lives
+  in this registry, with a hash and a URL to it in publisher-provided.
+  (Clarified 2026-11-10 by the reviewer; the maintainer's decision is the
+  compatibility, the placement is its consequence.)
 - 2026-11-10 (the maintainer, on the reviewer's recommendation): version 1 is
   API only (a read-only web page later); the registry API is a small separate
   Node service, not a countinghouse module (it may move into one once
