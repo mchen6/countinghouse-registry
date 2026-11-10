@@ -1,6 +1,6 @@
 # countinghouse-registry, version 1: design
 
-Status: draft for the maintainer's approval (2026-11-10).
+Status: approved 2026-11-10.
 Counterpart in the design conversation: the reviewer session, which holds the
 maintainer's decisions. Inputs: `DECISIONS.md`, `README.md`,
 `docs/notes/2026-11-10-registry-brainstorm.md` and the research note
@@ -477,9 +477,10 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
 
 ### 9.4 Instance endpoints (instance JWT for that instance)
 
-- `GET instances/{instance}/enabled?since=<watermark>&cursor=...`: entries
-  whose enable state, result, record status or notices changed after the
-  watermark; paginated like the read API (limit ≤100). The watermark is a
+- `GET instances/{instance}/enabled?since=<watermark>&limit=<1..100>`:
+  entries whose enable state, result, record status or notices changed after
+  the watermark, in sequence order; the sequence is also the pagination (a
+  full page means "poll again now"; no separate cursor). The watermark is a
   **change sequence**, not a time: every change to an enable, a result, a
   record's status or a notice takes the next value of one monotonic counter
   inside its write transaction. SQLite has a single writer, so sequence order
@@ -659,8 +660,9 @@ under these names (decided by the reviewer on the maintainer's delegation):
   Express 4, ajv 8 and sqlite3.
 - **`countinghouse-registry-cli`**: the generator, the publish command and
   the operator commands (11.4–12), for module authors and operators on any
-  machine Node 24 runs on. Its only runtime dependency beyond Node is ajv
-  (validation); no sqlite3, no Express. It signs with `node:crypto`.
+  machine Node 24 runs on. Its only runtime dependencies beyond Node are
+  ajv and ajv-formats (validation; both used by countinghouse); no sqlite3,
+  no Express. It signs with `node:crypto`.
 
 Code both need (the canonical hash, the `server.json` validation rules, the
 record schema) lives in the CLI package and is required by the service
