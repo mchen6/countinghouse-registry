@@ -11,9 +11,10 @@ schema unchanged, so every MCP client and subregistry that reads the official
 registry can read this one, and this one can mirror the official catalogue.
 On top of the standard entry it adds what a [countinghouse](https://github.com/mchen6/countinghouse)
 deployment knows about a server: its validated tool surface, declared
-permissions, pricing, composition targets, and whether a hosted instance is
+permissions, composition targets, and whether a hosted instance is
 running, carried in the schema's extension fields and invisible to clients
-that do not know them.
+that do not know them. (Prices are per countinghouse deployment, not per
+module, and are not published.)
 
 The difference from a plain registry: an entry is not only "where to get it"
 but can be **"run it here"**, as a countinghouse module with per-key access,

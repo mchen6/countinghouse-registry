@@ -36,3 +36,14 @@
   client). Package entries (npm, PyPI, Docker) through countinghouse follow
   the out-of-process host on the countinghouse side; hosted-entry billing
   follows P2 usage records.
+- 2026-11-10 (the maintainer): a countinghouse module's run form is a
+  generated launcher. The module's npm package carries `mcpName` equal to
+  its server name, one `bin` launcher that runs
+  `countinghouse --loadModule <itself>` (countinghouse as a peer dependency,
+  `^8`), the generated `server.json` with the countinghouse pointer in
+  publisher-provided, and its countinghouse record. Hosted instances are
+  listed as remotes. The countinghouse side is its item N1.
+- 2026-11-10 (the reviewer, on the maintainer's delegation): the mirror
+  identifies itself to the official registry with the User-Agent
+  `countinghouse-registry/<version> (+https://github.com/mchen6/countinghouse-registry)`,
+  never a browser string.
