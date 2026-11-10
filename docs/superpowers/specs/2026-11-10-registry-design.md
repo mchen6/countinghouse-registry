@@ -885,3 +885,9 @@ Listed so the roadmap is visible; none of it is built in version 1.
   (7.5).
 - **Supply-chain recording** (digest, provenance result) once package
   entries are hosted.
+- **Read-only web console** (catalogue, enabled entries per instance,
+  usage): after the pilot and before charging; a static page in this
+  repository over the existing API.
+- **Upstream OAuth and client-facing OIDC** are countinghouse's
+  first-paid-version items; version 1's remote `headers` are the gateway's
+  static credentials.
