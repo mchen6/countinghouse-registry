@@ -13,7 +13,6 @@
     "previousSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "tools": {
       "type": "array",
-      "maxItems": 500,
       "items": {
         "type": "object",
         "required": ["name", "inputSchema"],

@@ -7,8 +7,8 @@
 const Ajv2020 = require('ajv/dist/2020');
 const {sha256Canonical} = require('countinghouse-registry-cli/lib/canonical-json');
 const resultsSchema = require('./results.schema.json');
-
-const MAX_TOOLS = 500;
+const {openConflict, hasOverride} = require('../publish/conflicts');
+const {MAX_TOOLS} = require('../publish/publish');
 const validateResult = new Ajv2020({allErrors: true, strict: false}).compile(resultsSchema);
 
 class EnableError extends Error {
@@ -53,11 +53,22 @@ function noticesOf(row, status) {
   return notices;
 }
 
+const streamable = (r) => Boolean(r && r.type === 'streamable-http');
+
+// The remote served for an entry, against the record's current remotes (upstream
+// may republish them): the one at the stored index while it is streamable-http,
+// else the first streamable-http one, else null (stop serving; docs/api.md).
+// A change to the remotes moves the sequence, so the instance sees the result.
+function remoteOf(serverJson, index) {
+  const remotes = (serverJson ? JSON.parse(serverJson).remotes : null) || [];
+  if (streamable(remotes[index])) return remotes[index];
+  return remotes.find(streamable) || null;
+}
+
 function itemOf(row) {
-  const server = row.server ? JSON.parse(row.server) : {};
   const official = row.official ? JSON.parse(row.official) : {};
   const status = row.hidden_reason ? 'deleted' : official.status;
-  const item = {name: row.name, version: row.version, state: row.state, remote: (server.remotes || [])[row.remote_index] || null,
+  const item = {name: row.name, version: row.version, state: row.state, remote: remoteOf(row.server, row.remote_index),
     status, notices: noticesOf(row, status)};
   if (row.sha256) item.sha256 = row.sha256;
   item.updatedAt = row.updated_at;
@@ -79,15 +90,17 @@ const resultView = (r) => {
   return v;
 };
 
-// The operator's listing: the instance's view plus the current result and the
-// history of every entry.
+// The operator's listing: the instance's view plus the current enable cycle's
+// latest result (null until the cycle has one, like sha256 and state) and the
+// whole history of every entry.
 async function operatorEnabled(store, instance, since, limit) {
   const {rows, items, nextSince} = await pollEnabled(store, instance, since, limit);
   for (const [i, row] of rows.entries()) {
-    const history = (await store.read('SELECT outcome, sha256, reason, at FROM results WHERE instance = ? AND name = ? AND version = ? ORDER BY id',
-      [instance, row.name, row.version])).map(resultView);
-    items[i].result = history.length ? history[history.length - 1] : null;
-    items[i].history = history;
+    const all = await store.read('SELECT outcome, sha256, reason, at, seq FROM results WHERE instance = ? AND name = ? AND version = ? ORDER BY id',
+      [instance, row.name, row.version]);
+    const cycle = all.filter((r) => r.seq > row.requested_seq);
+    items[i].result = cycle.length ? resultView(cycle[cycle.length - 1]) : null;
+    items[i].history = all.map(resultView);
   }
   return {items, nextSince};
 }
@@ -124,19 +137,19 @@ async function enableEntry(store, {instance, name, version, body, actor, now}) {
   return store.write(async (tx) => {
     const rec = await tx.get('SELECT server, official, hidden_reason FROM records WHERE name = ? AND version = ?', [name, version]);
     if (!rec) throw new EnableError(404, 'Server version not found');
-    if (await tx.get('SELECT 1 AS x FROM conflicts WHERE name = ? AND version = ? AND ack_at IS NULL', [name, version])) {
+    if (await openConflict(tx, name, version)) {
       throw new EnableError(409, `${name}@${version} has an unacknowledged conflict with an upstream copy; acknowledge it (or publish a new version) to enable it`);
     }
     const deleted = rec.hidden_reason || JSON.parse(rec.official).status === 'deleted';
-    if (deleted && !(await tx.get('SELECT 1 AS x FROM overrides WHERE name = ? AND version = ? AND keep_deleted = 1', [name, version]))) {
+    if (deleted && !(await hasOverride(tx, name, version))) {
       throw new EnableError(409, `${name}@${version} is deleted or gone upstream; set the keepDeleted override to enable it`);
     }
     const remotes = JSON.parse(rec.server).remotes || [];
     let index = body.remote;
     if (index === undefined) {
-      index = remotes.findIndex((r) => r && r.type === 'streamable-http');
+      index = remotes.findIndex(streamable);
       if (index < 0) throw new EnableError(422, `${name}@${version} has no streamable-http remote (sse remotes are not enabled in version 1)`);
-    } else if (!remotes[index] || remotes[index].type !== 'streamable-http') {
+    } else if (!streamable(remotes[index])) {
       throw new EnableError(422, `remote ${index} of ${name}@${version} is not a streamable-http remote`);
     }
     const seq = await tx.nextSeq();
@@ -155,7 +168,7 @@ async function disableEntry(store, {instance, name, version, actor, now}) {
     const row = await tx.get(`SELECT e.*, r.server FROM enables e LEFT JOIN records r ON r.name = e.name AND r.version = e.version
       WHERE e.instance = ? AND e.name = ? AND e.version = ?`, [instance, name, version]);
     if (!row) throw new EnableError(404, `${instance} has no enable for ${name}@${version}`);
-    const remote = row.server ? (JSON.parse(row.server).remotes || [])[row.remote_index] || null : null;
+    const remote = remoteOf(row.server, row.remote_index);
     if (row.state !== 'disabled') {
       const seq = await tx.nextSeq();
       await tx.run("UPDATE enables SET state = 'disabled', seq = ?, updated_at = ?, by_key = ? WHERE instance = ? AND name = ? AND version = ?",
@@ -168,6 +181,22 @@ async function disableEntry(store, {instance, name, version, actor, now}) {
 }
 
 const STATE_OF = {validated: 'validated', changed: 'changed', failed: 'failed'};
+
+// -> the EnableError the entry's state refuses this result with, or null.
+function stateRefusal(entry, current, {name, version, outcome, previousSha256}) {
+  if (outcome === 'validated' && entry.state !== 'requested') {
+    return new EnableError(409, `validated is accepted for an entry in state requested; ${name}@${version} is ${entry.state}`);
+  }
+  if (outcome === 'changed') {
+    if (entry.state !== 'validated' && entry.state !== 'changed') {
+      return new EnableError(409, `changed is accepted for an entry in state validated; ${name}@${version} is ${entry.state}`);
+    }
+    // previousSha256 is the hash the gateway serves against: the validated one,
+    // or (a newer list while changed) the current changed one.
+    if (!current || previousSha256 !== current.sha256) return new EnableError(409, `previousSha256 is not the current hash of ${name}@${version}`);
+  }
+  return null;
+}
 
 // POST .../instances/{instance}/results (9.4). -> {sha256} | {}.
 async function postResult(store, {instance, body, now}) {
@@ -185,25 +214,21 @@ async function postResult(store, {instance, body, now}) {
   return store.write(async (tx) => {
     const entry = await tx.get('SELECT state, requested_seq FROM enables WHERE instance = ? AND name = ? AND version = ?', [instance, name, version]);
     if (!entry || entry.state === 'disabled') throw new EnableError(409, `${name}@${version} is not enabled for ${instance}`);
-    // A result equal to one already accepted in this enable cycle (a repeat, or
-    // the gateway's late retry of an earlier one) is 200 and changes nothing.
-    const repeat = await tx.get(`SELECT 1 AS x FROM results WHERE instance = ? AND name = ? AND version = ? AND seq > ? AND outcome = ?
-      AND sha256 IS ? AND reason IS ? AND previous_sha256 IS ?`, [instance, name, version, entry.requested_seq, outcome, sha256, reason || null, previousSha256 || null]);
-    if (repeat) return answer;
-    const current = await tx.get('SELECT outcome, sha256, reason FROM results WHERE instance = ? AND name = ? AND version = ? AND seq > ? ORDER BY id DESC LIMIT 1',
-      [instance, name, version, entry.requested_seq]);
-    if (outcome === 'validated' && entry.state !== 'requested') {
-      throw new EnableError(409, `validated is accepted for an entry in state requested; ${name}@${version} is ${entry.state}`);
-    }
-    if (outcome === 'changed') {
-      if (entry.state !== 'validated' && entry.state !== 'changed') {
-        throw new EnableError(409, `changed is accepted for an entry in state validated; ${name}@${version} is ${entry.state}`);
-      }
-      // previousSha256 is the hash the gateway serves against: the validated one,
-      // or (a newer list while changed) the current changed one.
-      if (!current || previousSha256 !== current.sha256) {
-        throw new EnableError(409, `previousSha256 is not the current hash of ${name}@${version}`);
-      }
+    const current = await tx.get(`SELECT outcome, sha256, reason, previous_sha256 FROM results WHERE instance = ? AND name = ? AND version = ? AND seq > ?
+      ORDER BY id DESC LIMIT 1`, [instance, name, version, entry.requested_seq]);
+    // A repeat of the current result is 200 and changes nothing. Then the state
+    // checks: a result they accept is recorded, even when an equal one came
+    // earlier in the cycle (a list flapping back is a new current list); one they
+    // refuse is 200 with no change if an equal result was accepted earlier in
+    // this enable cycle (the gateway's late retry), else 409.
+    if (current && current.outcome === outcome && current.sha256 === sha256 && current.reason === (reason || null)
+      && current.previous_sha256 === (previousSha256 || null)) return answer;
+    const refusal = stateRefusal(entry, current, {name, version, outcome, previousSha256});
+    if (refusal) {
+      const earlier = await tx.get(`SELECT 1 AS x FROM results WHERE instance = ? AND name = ? AND version = ? AND seq > ? AND outcome = ?
+        AND sha256 IS ? AND reason IS ? AND previous_sha256 IS ?`, [instance, name, version, entry.requested_seq, outcome, sha256, reason || null, previousSha256 || null]);
+      if (earlier) return answer;
+      throw refusal;
     }
     const seq = await tx.nextSeq();
     await tx.run(`INSERT INTO results (instance, name, version, outcome, sha256, previous_sha256, reason, tools, at, seq)
@@ -233,4 +258,4 @@ async function applyInstances(store, configured, nowIso) {
   });
 }
 
-module.exports = {applyInstances, enableEntry, disableEntry, postResult, pollEnabled, operatorEnabled, hostingDetail, EnableError, MAX_TOOLS};
+module.exports = {applyInstances, enableEntry, disableEntry, postResult, pollEnabled, operatorEnabled, hostingDetail, EnableError};

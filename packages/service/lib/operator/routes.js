@@ -17,16 +17,6 @@ const {mirrorState} = require('../mirror/sync');
 const {serverHash, touchEnables} = require('../publish/conflicts');
 const {hostingDetail} = require('../enable/enable');
 
-// A recorded 7.2 conflict not yet acknowledged: it blocks new enables (Task 8).
-async function openConflict(tx, name, version) {
-  return Boolean(await tx.get('SELECT 1 AS x FROM conflicts WHERE name = ? AND version = ? AND ack_at IS NULL', [name, version]));
-}
-
-// The keepDeleted override (7.3): permits enables of a deleted or gone version.
-async function hasOverride(tx, name, version) {
-  return Boolean(await tx.get('SELECT 1 AS x FROM overrides WHERE name = ? AND version = ? AND keep_deleted = 1', [name, version]));
-}
-
 async function audit(tx, actor, action, subject, at) {
   await tx.run('INSERT INTO audit (at, key_fp, action, subject) VALUES (?, ?, ?, ?)', [at, actor.fp, action, subject]);
 }
@@ -164,4 +154,4 @@ function operatorRouter({store, config, log, auth, now, mirror}) {
   return router;
 }
 
-module.exports = {operatorRouter, operatorDetail, openConflict, hasOverride};
+module.exports = {operatorRouter, operatorDetail};

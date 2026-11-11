@@ -577,7 +577,12 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
   status>, notices: ["upstream-deprecated"|"upstream-deleted"|"gone-upstream"|"conflict"|"tools-changed"],
   sha256: <current result's hash, if any>, updatedAt}`. The remote object is
   served as listed (URL template, variables, header metadata); values come
-  from the instance's own config.
+  from the instance's own config. It is resolved against the record's
+  current remotes on every poll: the one at the chosen index while it is
+  still `streamable-http`, else the first `streamable-http` remote, else
+  `null` (the gateway stops serving and posts `failed`, reason `other`); a
+  different URL is a reconnect for the gateway (the reviewer's ruling of
+  2026-11-11).
 - `POST instances/{instance}/results`, body
   `{name, version, outcome: "validated"|"changed"|"failed", reason?, tools?, previousSha256?}`:
   - `validated`: requires `tools` (the `tools` array of the `tools/list`
@@ -607,7 +612,11 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
     outcome, sha256 or reason, time); the latest is the current state.
     Operator reads show the current result and the history.
   - Idempotent: a repeat equal to the current result (same outcome and
-    sha256 or reason) returns 200 and changes nothing.
+    sha256 or reason) returns 200 and changes nothing. A result the state
+    rules refuse answers 200 with no change when an equal result was
+    accepted earlier in the same enable (the gateway's late retry), else
+    409; one they accept is recorded even if an equal one came earlier (a
+    list changing back).
   - The body carries nothing about tenants, keys, callers, usage or the
     instance's address. The envelope's JSON Schema is closed
     (`additionalProperties: false`). Each `tools` item requires `name`

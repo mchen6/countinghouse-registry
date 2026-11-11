@@ -73,7 +73,7 @@ function enableRouter({store, config, log, auth, now}) {
     return sendJson(res, 200, {items: out.items, nextSince: out.nextSince});
   }));
 
-  router.post('/instances/:instance/results', configured, asInstance, json, guarded(log, 'Failed to record the result', async (req, res) => {
+  router.post('/instances/:instance/results', asInstance, configured, json, guarded(log, 'Failed to record the result', async (req, res) => {
     sendJson(res, 200, await postResult(store, {instance: req.params.instance, body: req.body, now: now()}));
   }));
 

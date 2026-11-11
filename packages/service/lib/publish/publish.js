@@ -65,6 +65,8 @@ async function publishServer(store, doc, actor, {claims, now = new Date(), log =
       // A version the mirror already serves becomes local; its copies stay for 7.2.
       await tx.run(`UPDATE records SET source = 'local', origin = 'local', server = ?, official = ?, changed_at = ?, mirrored_at = NULL,
         upstream_updated_at = NULL, upstream = NULL, seen_pass = NULL, hidden_reason = NULL WHERE name = ? AND version = ?`, [server, official, nowIso, name, version]);
+      // Its server, status and visibility are new to any instance serving it.
+      await touchEnables(tx, name, version);
     } else {
       await tx.run(`INSERT INTO records (source, name, version, server, official, origin, changed_at) VALUES ('local', ?, ?, ?, ?, 'local', ?)`,
         [name, version, server, official, nowIso]);

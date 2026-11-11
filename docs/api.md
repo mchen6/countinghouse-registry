@@ -172,8 +172,12 @@ These routes are under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and
     changed after `since`, in change-sequence order. Each is
     `{name, version, state, remote, status, notices, sha256?, updatedAt}`.
   - `state` is `requested`, `validated`, `changed`, `failed` or `disabled`.
-  - `remote` is the chosen object from `server.json` as listed. The values
-    come from the instance's own config.
+  - `remote` is the chosen object from the record's current `server.json`.
+    Upstream may republish a version with different remotes, so it is
+    resolved on every poll: the remote at the chosen index while that one is
+    still `streamable-http`, else the first `streamable-http` remote, else
+    `null`. A change to the remotes moves the sequence, so the item is
+    returned. Header and variable values come from the instance's own config.
   - `notices` are any of `upstream-deprecated`, `upstream-deleted`,
     `gone-upstream`, `conflict` and `tools-changed`. A local publisher's own
     status change carries no upstream notice.
@@ -202,7 +206,11 @@ These routes are under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and
   - Each `tools` item needs `name` (a string) and `inputSchema` (an object)
     and is otherwise open.
   - The answer is 200 `{sha256}` (`{}` for `failed`). A repeat equal to the
-    current result is 200 and changes nothing.
+    current result is 200 and changes nothing. A result the state rules
+    refuse is still 200 with no change when an equal result was accepted
+    earlier in the same enable (a late retry); otherwise it is 409. A result
+    they accept is recorded even when an equal one came earlier, so a list
+    that changes back is recorded as the current list.
   - A disabled entry, or one not enabled for the instance, is 409. More
     than 500 `tools` is 413.
   - Every accepted result is kept as history.
@@ -220,6 +228,10 @@ reports `changed`.
 - It re-takes `tools/list` for every served entry on a schedule (hourly by
   default) and on every reconnect, compares it with the validated hash, and
   on a difference stops serving and posts `changed`.
+- A `remote` with a different URL from the one it serves is handled as a
+  reconnect: it re-takes `tools/list`, compares, and posts `changed` on a
+  difference. A `null` remote means stop serving the entry and post
+  `failed` with reason `other`.
 - It retries failed connections with its own backoff and posts `failed`
   only after its retry budget. The registry never schedules retries.
 - It retries result posts until they are accepted; they are idempotent.

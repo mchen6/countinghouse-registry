@@ -38,6 +38,16 @@ async function touchEnables(tx, name, version) {
   await tx.run('UPDATE enables SET seq = ? WHERE name = ? AND version = ?', [seq, name, version]);
 }
 
+// A recorded 7.2 conflict not yet acknowledged: it blocks new enables (9.3).
+async function openConflict(tx, name, version) {
+  return Boolean(await tx.get('SELECT 1 AS x FROM conflicts WHERE name = ? AND version = ? AND ack_at IS NULL', [name, version]));
+}
+
+// The keepDeleted override (7.3): permits enables of a deleted or gone version.
+async function hasOverride(tx, name, version) {
+  return Boolean(await tx.get('SELECT 1 AS x FROM overrides WHERE name = ? AND version = ? AND keep_deleted = 1', [name, version]));
+}
+
 // copy: {name, version, server, official (JSON strings), mirrored_at}.
 // -> 'none' | 'identical' | 'conflict'.
 async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) {
@@ -88,4 +98,4 @@ async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) 
   return 'identical';
 }
 
-module.exports = {compareWithLocal, serverHash, conflictLogger, touchEnables};
+module.exports = {compareWithLocal, serverHash, conflictLogger, touchEnables, openConflict, hasOverride};

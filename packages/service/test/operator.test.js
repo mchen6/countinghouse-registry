@@ -9,7 +9,7 @@ const {insertRecord, server} = require('./support/records');
 const {createAuth} = require('../lib/auth/middleware');
 const {applyClaims} = require('../lib/publish/namespaces');
 const {compareWithLocal} = require('../lib/publish/conflicts');
-const {hasOverride, openConflict} = require('../lib/operator/routes');
+const {hasOverride, openConflict} = require('../lib/publish/conflicts');
 const {signTimestamp} = require('countinghouse-registry-cli/lib/sign');
 
 const X = '/v0.1/x/io.github.mchen6/countinghouse-registry';

@@ -131,4 +131,27 @@ describe('enables (operator)', () => {
     // The operator listing is the operator's; an unknown instance is 404.
     assert.strictEqual((await t.call('GET', `${X}/instances/gw-9/enabled`, await t.operator())).status, 404);
   });
+
+  it('a PUT without a body enables with the defaults', async () => {
+    await t.seed('io.example/srv', '1.0.0');
+    const res = await put('gw-1', 'io.example/srv', '1.0.0', undefined);
+    assert.strictEqual(res.status, 200, res.text);
+    assert.strictEqual(res.body.state, 'requested');
+  });
+
+  it('after a re-PUT the operator listing\'s result is the new cycle\'s (null until it has one); history stays whole', async () => {
+    await t.seed('io.example/srv', '1.0.0');
+    await put('gw-1', 'io.example/srv', '1.0.0', {});
+    const gw = await t.instance('gw-1');
+    await t.call('POST', `${X}/instances/gw-1/results`, gw, {name: 'io.example/srv', version: '1.0.0', outcome: 'validated', tools: [{name: 'echo', inputSchema: {}}]});
+    await put('gw-1', 'io.example/srv', '1.0.0', {});
+    const list = async () => (await t.call('GET', `${X}/instances/gw-1/enabled`, await t.operator())).body.items[0];
+    let item = await list();
+    assert.strictEqual(item.result, null);
+    assert.deepStrictEqual(item.history.map((h) => h.outcome), ['validated']);
+    await t.call('POST', `${X}/instances/gw-1/results`, gw, {name: 'io.example/srv', version: '1.0.0', outcome: 'failed', reason: 'timeout'});
+    item = await list();
+    assert.deepStrictEqual([item.result.outcome, item.result.reason], ['failed', 'timeout']);
+    assert.deepStrictEqual(item.history.map((h) => h.outcome), ['validated', 'failed']);
+  });
 });

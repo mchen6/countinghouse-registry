@@ -263,6 +263,82 @@ describe('instance endpoints', () => {
     assert.deepStrictEqual(items.map((i) => i.remote.url), [STREAMABLE(7).url]);
   });
 
+  it('a local publish over an enabled mirrored version reaches the instance: active, no notice', async () => {
+    const {remoteServer} = require('./support/enable-app');
+    const name = 'com.example/srv';
+    await addCopy(name, remoteServer(name, '1.0.0'), officialOf('deprecated'));
+    await rebuild([name]);
+    await enable(name);
+    const mark = (await poll()).body.nextSince;
+    const res = await t.call('POST', '/v0.1/publish', await t.operator(), remoteServer(name, '1.0.0'));
+    assert.strictEqual(res.status, 200, res.text);
+    const items = (await poll(mark)).body.items;
+    assert.deepStrictEqual(items.map((i) => [i.name, i.status, i.notices]), [[name, 'active', []]]);
+  });
+
+  it('a local publish un-hiding a gone-upstream version reaches the instance', async () => {
+    const {remoteServer} = require('./support/enable-app');
+    const name = 'com.example/gone';
+    await t.seed(name, '1.0.0', {hidden_reason: 'gone-upstream'});
+    await t.store.write((tx) => tx.run("INSERT INTO overrides (name, version, keep_deleted, by_key, at) VALUES (?, '1.0.0', 1, 'ops', '2026-11-10T00:00:00.000Z')", [name]));
+    await enable(name);
+    const mark = (await poll()).body.nextSince;
+    assert.strictEqual((await t.call('POST', '/v0.1/publish', await t.operator(), remoteServer(name, '1.0.0'))).status, 200);
+    const items = (await poll(mark)).body.items;
+    assert.deepStrictEqual(items.map((i) => [i.name, i.status, i.notices]), [[name, 'active', []]]);
+  });
+
+  it('the remote is re-resolved against the current list: an sse-only list serves null; a reorder still serves the streamable-http one', async () => {
+    const {remoteServer, STREAMABLE, SSE} = require('./support/enable-app');
+    const name = 'io.example/remotes';
+    await addCopy(name, remoteServer(name, '1.0.0', [STREAMABLE(1), STREAMABLE(2)]), officialOf('active'));
+    await rebuild([name]);
+    const res = await t.call('PUT', t.enablePath('gw-1', name, '1.0.0'), await t.operator(), {remote: 1});
+    assert.strictEqual(res.status, 200, res.text);
+    // Reordered, the stored index points at the other streamable-http remote: kept.
+    await addCopy(name, remoteServer(name, '1.0.0', [STREAMABLE(2), STREAMABLE(1)]), officialOf('active'));
+    await rebuild([name]);
+    let item = (await poll()).body.items.find((i) => i.name === name);
+    assert.strictEqual(item.remote.url, STREAMABLE(1).url);
+    // The index now points at an sse remote: the first streamable-http one is served.
+    const mark = (await poll()).body.nextSince;
+    await addCopy(name, remoteServer(name, '1.0.0', [STREAMABLE(3), SSE]), officialOf('active'));
+    await rebuild([name]);
+    item = (await poll(mark)).body.items.find((i) => i.name === name);
+    assert.strictEqual(item.remote.url, STREAMABLE(3).url);
+    // No streamable-http remote left: null, and the item reaches the instance.
+    const mark2 = (await poll()).body.nextSince;
+    await addCopy(name, remoteServer(name, '1.0.0', [SSE, {type: 'sse', url: 'https://srv2.example/sse'}]), officialOf('active'));
+    await rebuild([name]);
+    item = (await poll(mark2)).body.items.find((i) => i.name === name);
+    assert.strictEqual(item.remote, null);
+  });
+
+  it('a list flapping between changed hashes records every result; a late retry still answers 200', async () => {
+    await t.seed('io.example/flap', '1.0.0');
+    await enable('io.example/flap');
+    const a = TOOLS;
+    const b = [...TOOLS, {name: 'b', inputSchema: {}}];
+    const hA = (await post(result('io.example/flap', 'validated', {tools: a}))).body.sha256;
+    const hB = (await post(result('io.example/flap', 'changed', {tools: b, previousSha256: hA}))).body.sha256;
+    assert.strictEqual((await post(result('io.example/flap', 'changed', {tools: a, previousSha256: hB}))).status, 200);
+    const back = await post(result('io.example/flap', 'changed', {tools: b, previousSha256: hA}));
+    assert.strictEqual(back.status, 200, back.text);
+    const rows = await t.store.read("SELECT outcome, sha256 FROM results WHERE name = 'io.example/flap' ORDER BY id");
+    assert.deepStrictEqual(rows.map((r) => [r.outcome, r.sha256]), [['validated', hA], ['changed', hB], ['changed', hA], ['changed', hB]]);
+    assert.strictEqual((await poll()).body.items.find((i) => i.name === 'io.example/flap').sha256, hB);
+    // The validated, arriving late: 200, nothing recorded.
+    assert.strictEqual((await post(result('io.example/flap', 'validated', {tools: a}))).status, 200);
+    assert.strictEqual((await t.store.read("SELECT COUNT(*) AS n FROM results WHERE name = 'io.example/flap'"))[0].n, 4);
+    // A result never accepted in this cycle that fails the state checks is 409.
+    assert.strictEqual((await post(result('io.example/flap', 'validated', {tools: b}))).status, 409);
+  });
+
+  it('results without a token are 401 for an unknown instance id too', async () => {
+    assert.strictEqual((await post(result('io.example/a', 'failed', {reason: 'timeout'}), null, 'gw-9')).status, 401);
+    assert.strictEqual((await post(result('io.example/a', 'failed', {reason: 'timeout'}), null, 'gw-1')).status, 401);
+  });
+
   it('a delayed retry of a result accepted earlier in the same enable is 200 and changes nothing', async () => {
     await t.seed('io.example/a', '1.0.0');
     await enable('io.example/a');
