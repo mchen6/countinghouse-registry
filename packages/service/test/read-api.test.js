@@ -18,6 +18,7 @@ describe('read API', () => {
     for (const r of fx.body.servers) {
       await insertRecord(t.store, {name: r.server.name, version: r.server.version, server: r.server, official: r._meta[OFFICIAL]});
     }
+    await insertRecord(t.store, {name: 'zz.after/x', version: '1'});
     const res = await request(t.url).get('/v0.1/servers?limit=2').expect(200);
     assert.strictEqual(res.headers['content-type'], 'application/json');
     assert.strictEqual(res.body.servers.length, 2);
@@ -27,7 +28,7 @@ describe('read API', () => {
       assert.strictEqual(r._meta[OURS].origin, 'mirror');
       assert.ok(r._meta[OURS].changedAt);
     });
-    // A full page carries nextCursor, as upstream's own fixture does.
+    // A page followed by more records carries nextCursor, as upstream's fixture does.
     assert.deepStrictEqual(Object.keys(res.body.metadata).sort(), Object.keys(fx.body.metadata).sort());
     assert.strictEqual(res.body.metadata.count, 2);
   });
@@ -44,17 +45,16 @@ describe('read API', () => {
       pages++;
       res.body.servers.forEach((r) => seen.push(`${r.server.name}@${r.server.version}`));
       cursor = res.body.metadata.nextCursor;
-      if (res.body.servers.length < 2) assert.strictEqual(cursor, undefined);
     } while (cursor);
     assert.strictEqual(pages, 3);
     assert.deepStrictEqual(seen, ['B/x@1.0.0', 'a/x@1.10.0', 'a/x@1.2.0', 'b/x@1.0.0', 'é/x@1']);
   });
 
-  it('a full last page is followed by an empty page without nextCursor', async () => {
+  it('a full last page has no nextCursor', async () => {
     for (const n of ['a/x', 'b/x']) await insertRecord(t.store, {name: n, version: '1'});
-    const first = await request(t.url).get('/v0.1/servers?limit=2').expect(200);
-    const res = await request(t.url).get(`/v0.1/servers?limit=2&cursor=${encodeURIComponent(first.body.metadata.nextCursor)}`).expect(200);
-    assert.deepStrictEqual(res.body, {servers: [], metadata: {count: 0}});
+    const res = await request(t.url).get('/v0.1/servers?limit=2').expect(200);
+    assert.strictEqual(res.body.servers.length, 2);
+    assert.deepStrictEqual(res.body.metadata, {count: 2});
   });
 
   it('refuses a cursor that is not ours with 400', async () => {
@@ -227,5 +227,51 @@ describe('read API', () => {
     t.store.read = () => Promise.reject(new Error('SQLITE_CORRUPT: secret path /var/x'));
     const res = await request(t.url).get('/v0.1/servers').expect(500);
     assert.deepStrictEqual(res.body, {title: 'Internal Server Error', status: 500, detail: 'Failed to list servers'});
+  });
+
+  it('search folds case beyond ASCII', async () => {
+    await insertRecord(t.store, {name: 'io.github.x/über-tool', version: '1'});
+    const res = await request(t.url).get(`/v0.1/servers?search=${encodeURIComponent('ÜBER')}`).expect(200);
+    assert.deepStrictEqual(res.body.servers.map((r) => r.server.name), ['io.github.x/über-tool']);
+  });
+
+  it('search treats double quotes as text', async () => {
+    await insertRecord(t.store, {name: 'io.x/abc', version: '1'});
+    const res = await request(t.url).get(`/v0.1/servers?search=${encodeURIComponent('a"b')}`).expect(200);
+    assert.deepStrictEqual(res.body.servers, []);
+  });
+
+  it('serves a hidden record as deleted when deleted records are asked for', async () => {
+    await insertRecord(t.store, {name: 'a/x', version: '1', hidden_reason: 'gone-upstream', changed_at: '2026-11-10T05:00:00.000Z'});
+    for (const p of ['/v0.1/servers?updated_since=2026-11-01T00:00:00Z', '/v0.1/servers?include_deleted=true']) {
+      const res = await request(t.url).get(p).expect(200);
+      assert.strictEqual(res.body.servers[0]._meta[OFFICIAL].status, 'deleted', p);
+    }
+    const d = await request(t.url).get('/v0.1/servers/a%2Fx/versions/1?include_deleted=true').expect(200);
+    assert.strictEqual(d.body._meta[OFFICIAL].status, 'deleted');
+    assert.strictEqual(d.body._meta[OFFICIAL].statusChangedAt, '2026-11-10T05:00:00.000Z');
+  });
+
+  it('a bad path encoding is a problem+json 400, not HTML', async () => {
+    const res = await request(t.url).get('/v0.1/servers/%E0/versions').expect(400);
+    assert.strictEqual(res.headers['content-type'], 'application/problem+json');
+    assert.strictEqual(res.body.detail, 'Invalid server name encoding');
+  });
+
+  it('a version whose publishedAt is missing sorts last, deterministically', async () => {
+    await insertRecord(t.store, {name: 'a/x', version: '1', official: official({publishedAt: '2026-01-01T00:00:00Z', isLatest: false})});
+    await insertRecord(t.store, {name: 'a/x', version: '0', official: {status: 'active', isLatest: false}});
+    await insertRecord(t.store, {name: 'a/x', version: '2', official: official({publishedAt: '2026-02-01T00:00:00Z'})});
+    const res = await request(t.url).get('/v0.1/servers/a%2Fx/versions').expect(200);
+    assert.deepStrictEqual(res.body.servers.map((r) => r.server.version), ['2', '1', '0']);
+  });
+
+  it('CORS headers and preflights are for GET only', async () => {
+    const res = await request(t.url).post('/v0.1/servers').set('Origin', 'https://example.org');
+    assert.strictEqual(res.headers['access-control-allow-origin'], undefined);
+    const pre = await request(t.url).options('/v0.1/servers').set('Origin', 'https://example.org')
+      .set('Access-Control-Request-Method', 'POST');
+    assert.notStrictEqual(pre.status, 204);
+    assert.strictEqual(pre.headers['access-control-allow-origin'], undefined);
   });
 });

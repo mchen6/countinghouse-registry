@@ -52,6 +52,14 @@ function createApp({store, config, log, mirror = null, versionInfo = defaultVers
   });
 
   app.use((req, res) => problem(res, 404, 'Endpoint not found.'));
+
+  // Errors raised before a handler runs (a path segment that is not valid
+  // percent-encoding) answer as problem+json, never Express's HTML page.
+  app.use((err, req, res, next) => {
+    if (err instanceof URIError || err.status === 400) return problem(res, 400, 'Invalid server name encoding');
+    log.error('http.error', 'an unhandled request error', {code: err.code || err.name});
+    return problem(res, 500, 'Internal server error');
+  });
   return app;
 }
 

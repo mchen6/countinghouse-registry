@@ -46,4 +46,12 @@ describe('read params', () => {
     const r = parseListParams({limit: 'abc', include_deleted: 'maybe'});
     assert.strictEqual(r.problem.errors.length, 2);
   });
+
+  it('refuses a calendar date that does not exist, as Go does', () => {
+    for (const v of ['2026-02-30T00:00:00Z', '2026-13-01T00:00:00Z', '2026-11-01T24:00:00Z', '2026-11-01T00:00:60Z', '2026-11-01t00:00:00z']) {
+      const r = parseListParams({updated_since: v});
+      assert.ok(r.problem, v);
+      assert.strictEqual(r.problem.status, 400, v);
+    }
+  });
 });

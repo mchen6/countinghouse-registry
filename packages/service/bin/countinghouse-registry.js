@@ -26,11 +26,16 @@ async function main() {
   const server = app.listen(config.listen.port, config.listen.host, () => {
     log.info('service.listen', 'listening', {host: config.listen.host, port: config.listen.port});
   });
+  let stopping = false;
   const stop = (signal) => {
+    if (stopping) return;
+    stopping = true;
     log.info('service.stop', 'stopping', {signal});
-    server.close(async () => {
-      await store.close();
-      process.exit(0);
+    server.close(() => {
+      store.close().then(() => process.exit(0), (err) => {
+        log.error('service.stop.failed', 'the store did not close cleanly', {code: err.code || err.name});
+        process.exit(1);
+      });
     });
   };
   process.on('SIGTERM', () => stop('SIGTERM'));

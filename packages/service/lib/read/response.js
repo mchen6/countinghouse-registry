@@ -10,7 +10,11 @@ function toServerResponse(row, view = {}) {
   if (view.record) ours.record = view.record;
   if (view.hosting && view.publicHosting !== 'none') ours.hosting = view.hosting;
   if (view.operator && view.conflict) ours.conflict = true;
-  return {server: JSON.parse(row.server), _meta: {[OFFICIAL]: JSON.parse(row.official), [OURS]: ours}};
+  let official = JSON.parse(row.official);
+  // A record hidden here (gone upstream) is served as deleted wherever deleted
+  // records are asked for, so a downstream sync learns it is gone.
+  if (row.hidden_reason) official = {...official, status: 'deleted', statusChangedAt: row.changed_at};
+  return {server: JSON.parse(row.server), _meta: {[OFFICIAL]: official, [OURS]: ours}};
 }
 
 module.exports = {toServerResponse, OFFICIAL, OURS};
