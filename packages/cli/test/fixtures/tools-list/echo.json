@@ -1,0 +1,10 @@
+{
+  "tools": [
+    {
+      "name": "echo.echo",
+      "description": "Echoes the text back",
+      "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+      "outputSchema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+    }
+  ]
+}

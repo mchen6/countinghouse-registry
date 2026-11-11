@@ -46,6 +46,15 @@ describe('signTimestamp', () => {
     }
   });
 
+  it('with {millis: true} keeps the milliseconds, so two exchanges in one second differ', () => {
+    const now = new Date('2026-11-10T12:34:56.789Z');
+    for (const kp of pairs()) {
+      const {timestamp, signed_timestamp: sig} = signTimestamp(kp.privateHex, kp.algorithm, now, {millis: true});
+      assert.strictEqual(timestamp, '2026-11-10T12:34:56.789Z');
+      assert.strictEqual(verify(kp.algorithm, kp.publicB64, timestamp, sig), true, kp.algorithm);
+    }
+  });
+
   it('refuses a private key of the wrong length or form', () => {
     assert.throws(() => signTimestamp('ab'.repeat(31), 'ed25519'), /ed25519 private key must be 32 bytes \(64 hex characters\)/);
     assert.throws(() => signTimestamp('ab'.repeat(47), 'ecdsa-p384'), /ecdsa-p384 private key must be 48 bytes \(96 hex characters\)/);

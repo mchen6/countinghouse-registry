@@ -1,0 +1,33 @@
+{
+  "name": "countinghouse-module-echo",
+  "version": "1.0.0",
+  "description": "Echoes text back: a minimal countinghouse module",
+  "mcpName": "com.example/echo",
+  "license": "Apache-2.0",
+  "bin": {
+    "countinghouse-module-echo": "./bin/countinghouse-launch.js"
+  },
+  "files": [
+    "api.json",
+    "schema.json",
+    "handlers/",
+    "bin/",
+    "server.json",
+    "countinghouse-record.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/example/countinghouse-module-echo.git",
+    "directory": "modules/echo"
+  },
+  "homepage": "https://github.com/example/countinghouse-module-echo",
+  "peerDependencies": {
+    "countinghouse": "^8"
+  },
+  "devDependencies": {
+    "countinghouse": "^8"
+  },
+  "countinghouse": {
+    "calls": ["log-read/readService.list"]
+  }
+}

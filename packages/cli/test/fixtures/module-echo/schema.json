@@ -1,0 +1,4 @@
+{
+  "EchoInput": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+  "EchoOutput": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
+}

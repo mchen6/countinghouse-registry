@@ -2,7 +2,8 @@
 
 An MCP server registry that can **host** what it lists.
 
-Status: design only (2026-11-10). No code yet.
+Status: version 1 in progress (2026-11). The design is
+`docs/superpowers/specs/2026-11-10-registry-design.md`.
 
 ## What it is
 
@@ -41,6 +42,33 @@ metering, identity hand-off, audit and a validated tool contract.
   reimplements some tools and serves the rest through the enabled entry;
   then the entry is retired. The recorded tool surface is the regression
   test throughout.
+
+## Install and quick start
+
+Two npm packages, both Node ≥ 24.15:
+
+- **`countinghouse-registry`**, the service. It stores everything in one
+  SQLite file, and `docs/operator.md` covers its config, keys and claims.
+
+  ```
+  npm install -g countinghouse-registry
+  countinghouse-registry --config registry.json
+  ```
+
+- **`countinghouse-registry-cli`**, for module authors and operators on any
+  machine. It generates and publishes countinghouse module entries,
+  publishes a directory of `server.json` files, and wraps the operator
+  endpoints.
+
+  ```
+  npx countinghouse-registry-cli generate . --registry https://registry.example.org
+  npx countinghouse-registry-cli publish . --registry https://registry.example.org --domain example.org --key ./publisher.key
+  npx countinghouse-registry-cli register ./servers --registry https://registry.example.org --domain example.org --key ./publisher.key
+  ```
+
+An unmodified `mcp-publisher` also publishes to the registry
+(`docs/operator.md`, "With mcp-publisher"). Clients read it as they read the
+official registry; `docs/api.md` lists the endpoints.
 
 ## Relationship to countinghouse
 

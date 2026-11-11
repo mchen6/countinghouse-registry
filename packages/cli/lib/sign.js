@@ -24,10 +24,12 @@ function privateKeyOf(privateKeyHex, algorithm) {
     x: pub.subarray(1, 49).toString('base64url'), y: pub.subarray(49).toString('base64url')}});
 }
 
-// -> {timestamp, signed_timestamp}
-function signTimestamp(privateKeyHex, algorithm, now = new Date()) {
+// -> {timestamp, signed_timestamp}. {millis: true} keeps the milliseconds (the
+// registry accepts RFC 3339 fractions): the CLI's form, so two of its exchanges
+// in one second are not refused as a replay (10.2).
+function signTimestamp(privateKeyHex, algorithm, now = new Date(), {millis = false} = {}) {
   const key = privateKeyOf(privateKeyHex, algorithm);
-  const timestamp = now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const timestamp = millis ? now.toISOString() : now.toISOString().replace(/\.\d{3}Z$/, 'Z');
   const data = Buffer.from(timestamp);
   const sig = algorithm === 'ed25519' ? crypto.sign(null, data, key)
     : crypto.sign('sha384', data, {key, dsaEncoding: 'ieee-p1363'});

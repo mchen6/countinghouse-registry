@@ -236,6 +236,79 @@ start: they leave the public hosting count, and the instance's results are
 refused (404) even while its last token is still valid. The service logs
 `enable.instances.removed` and audits each entry as disabled by `config`.
 
+## Publishing modules and servers (spec sections 11 and 12)
+
+`countinghouse-registry-cli` (the second npm package; Node ≥ 24.15, no native
+dependency) signs exchanges for you, so no one hand-signs a token. Every
+signed command takes `--registry <base URL> --domain <d>` and a private key:
+`--key <file>`, or the environment variable
+`COUNTINGHOUSE_REGISTRY_PRIVATE_KEY` (hex, the form `mcp-publisher` takes;
+never both). The key and the tokens are never printed. The key's
+`namespaces` decide what it may publish: a name outside your `claims` is
+refused with 403.
+
+**A countinghouse module** (its author runs this before `npm publish`):
+
+```
+npx countinghouse-registry-cli generate . --registry https://<this registry>
+npx countinghouse-registry-cli publish . --registry https://<this registry> --domain <d> --key <file>
+```
+
+- `generate` runs the module's own `countinghouse-validate --json`
+  (countinghouse must be installed as a devDependency; otherwise exit 2),
+  checks `package.json` (`mcpName`, strict semver, a description of at
+  most 100 characters, the launcher `bin`, `files`, `repository`, the
+  countinghouse peer dependency), reads the tool list with countinghouse's
+  `toolsListForModule` in a child process, and writes
+  `countinghouse-record.json` and `server.json` with the pointer to the
+  record. Problems are exit 1, and nothing is written. A module that
+  discovers its devices at run time cannot be generated from its
+  directory: run the capture against a server instead.
+- `publish` checks the pointer against the record on disk (both hash
+  prefixes are printed on a mismatch: run `generate` again), PUTs the
+  record, then publishes `server.json`. `npm publish` and any push to the
+  official registry stay separate steps.
+- The module's launcher writes a demo key to `./auth.json` in the
+  directory it is started from (or `--authConfigPath`) and prints it once.
+  It is the module user's credential: keep it out of version control. With
+  `COUNTINGHOUSE_API_KEY` set, the launcher uses that one key instead.
+
+**A directory of `server.json` files** (a customer with no registry of
+their own hands you a directory):
+
+```
+npx countinghouse-registry-cli register <dir> --registry https://<this registry> --domain <d> --key <file>
+```
+
+Every `server.json` under `<dir>` (at any depth, not under `node_modules`
+or a dot-directory) is published with one exchange, in path order. A
+`countinghouse-record.json` beside a `server.json` with a pointer is PUT
+first. A failed file does not stop the others. It prints one line per file
+(`ok   <file> <name>@<version>`; `skip <file> …: already published here`
+when that version is already published here as the same document; or
+`FAIL <file> …: <status> <title>: <detail>` followed by each validation
+issue) and a total, `N published, M skipped, K failed`. Exit 0 when no file
+failed, 1 otherwise; a registry that stops answering ends the run with exit
+2, naming the files not tried. Tokens last 5 minutes, so a long run signs
+in again when one expires. An empty directory is exit 1 with "no
+server.json found".
+
+**The operator commands** are thin wrappers over the operator endpoints
+above, printing the registry's JSON answer:
+
+| Command | Endpoint |
+|---|---|
+| `enable <instance> <name> <version> [--remote <index>]` | `PUT …/instances/{instance}/enabled/{name}/versions/{version}` |
+| `disable <instance> <name> <version>` | `DELETE` of the same path |
+| `enabled <instance> [--since <seq>] [--limit <n>]` | `GET …/instances/{instance}/enabled` (with results and history) |
+| `conflicts` | `GET …/conflicts` |
+| `acknowledge <name> <version>` | `POST …/conflicts/{name}/versions/{version}/acknowledge` |
+| `override <name> <version> [--remove]` | `POST` (`{"keepDeleted": true}`) or `DELETE …/overrides/{name}/versions/{version}` |
+| `sync [--upstream <name>]` | `POST …/mirror/sync` |
+
+A refusal is exit 1 with `METHOD path: status title: detail`. An
+unreachable registry is exit 2.
+
 ## Health (spec section 13.4)
 
 `GET /healthz` is **internal**: point your orchestrator's or proxy's health
