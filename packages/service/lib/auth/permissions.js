@@ -1,6 +1,6 @@
 'use strict';
 // What a token's actor may do (spec section 10). An actor is
-// {kind: 'publisher', sub, namespaces, operate} or {kind: 'instance', sub,
+// {kind: 'publisher', sub, fp, namespaces, operate} or {kind: 'instance', sub, fp,
 // instance}; a permission is 'publish:<server name>', 'operate' or
 // 'instance:<id>'. Task 6's real auth and the tests' fakeAuth both decide here.
 const {problem} = require('../http/problem');
@@ -29,8 +29,11 @@ function denial(actor, perm) {
 // An auth object for createApp: require(perm) is middleware; perm may be a
 // function of the request (the server name is in the path or the body).
 // getActor(req) -> actor | null (no or invalid token: 401).
+// actor(req) is the same lookup without a verdict, for reads that show more to
+// an operator (an absent or bad token there is simply a public read).
 function authFor(getActor) {
   return {
+    actor: (req) => getActor(req),
     require: (perm) => (req, res, next) => {
       const actor = getActor(req);
       if (!actor) return problem(res, 401, 'Invalid or expired Registry JWT token');

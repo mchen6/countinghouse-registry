@@ -18,9 +18,9 @@ const BEARER = /^Bearer ([A-Za-z0-9_.-]+)$/;
 
 function actorOf(claims) {
   if (claims.kind === 'publisher') {
-    return {kind: 'publisher', sub: claims.sub, namespaces: claims.perm.namespaces, operate: claims.perm.operate};
+    return {kind: 'publisher', sub: claims.sub, fp: claims.fp, namespaces: claims.perm.namespaces, operate: claims.perm.operate};
   }
-  return {kind: 'instance', sub: claims.sub, instance: claims.perm.instance};
+  return {kind: 'instance', sub: claims.sub, fp: claims.fp, instance: claims.perm.instance};
 }
 
 // -> {require(perm), router}. Throws ConfigError for a key that does not parse.

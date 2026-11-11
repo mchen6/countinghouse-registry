@@ -4,7 +4,8 @@
 // publisher-provided on both sides:
 //   - identical: the local record becomes origin local+upstream with mirroredAt,
 //     and an upstream status change made after our last one overlays its status,
-//     message and statusChangedAt (7.3); our publishedAt and updatedAt stay;
+//     message and statusChangedAt (7.3); our publishedAt and updatedAt stay; a
+//     conflict recorded earlier is closed;
 //   - different: the local record stays as served (origin local, no mirroredAt),
 //     and a conflict (name, version, both hashes, first seen) is recorded once;
 //     onConflict hears of a new one.
@@ -23,6 +24,14 @@ function serverHash(json) {
 const conflictLogger = (log) => ({name, version, localSha, upstreamSha}) =>
   log.warn('publish.conflict', 'an upstream copy differs from the local record', {name, version, local: localSha.slice(0, 12), upstream: upstreamSha.slice(0, 12)});
 
+// A change instances must see (a conflict closed or acknowledged, an override
+// set or removed): the name@version's enables take a change sequence value, so
+// their next poll returns them (9.4).
+async function touchEnables(tx, name, version) {
+  const seq = await tx.nextSeq();
+  await tx.run('UPDATE enables SET seq = ? WHERE name = ? AND version = ?', [seq, name, version]);
+}
+
 // copy: {name, version, server, official (JSON strings), mirrored_at}.
 // -> 'none' | 'identical' | 'conflict'.
 async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) {
@@ -39,6 +48,11 @@ async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) 
       await tx.run("UPDATE records SET origin = 'local', mirrored_at = NULL, changed_at = ? WHERE name = ? AND version = ? AND source = 'local'", [nowIso, copy.name, copy.version]);
     }
     return 'conflict';
+  }
+  // An identical copy closes a conflict recorded earlier (the audit keeps any
+  // acknowledgement of it); instances serving it learn on their next poll.
+  if (await tx.get('DELETE FROM conflicts WHERE name = ? AND version = ? RETURNING name', [copy.name, copy.version])) {
+    await touchEnables(tx, copy.name, copy.version);
   }
   const meta = JSON.parse(local.official);
   const up = JSON.parse(copy.official);
@@ -59,4 +73,4 @@ async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) 
   return 'identical';
 }
 
-module.exports = {compareWithLocal, serverHash, conflictLogger};
+module.exports = {compareWithLocal, serverHash, conflictLogger, touchEnables};

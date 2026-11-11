@@ -56,10 +56,10 @@ async function main() {
   }
   const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString(), {onConflict: conflictLogger(log)});
   if (rebuilt) log.info('mirror.upstreams', 'applied the upstream list', {upstreams: config.upstreams.length});
-  const app = createApp({store, config, log, auth});
   const userAgent = `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`;
   const scheduler = createMirror({store, log, config,
     clientFor: (u) => createUpstreamClient({baseUrl: u.url, userAgent, maxDelayMs: u.intervalMinutes * 60000})});
+  const app = createApp({store, config, log, auth, mirror: scheduler});
   const server = app.listen(config.listen.port, config.listen.host, () => {
     log.info('service.listen', 'listening', {host: config.listen.host, port: config.listen.port});
     scheduler.start();

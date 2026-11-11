@@ -69,6 +69,7 @@ describe('the auth exchanges', () => {
     const claims = tokenClaims(res.body.registry_token);
     assert.strictEqual(claims.sub, 'pub');
     assert.strictEqual(claims.kind, 'publisher');
+    assert.strictEqual(claims.fp, `ed25519:${PUB.publicB64.slice(0, 8)}`);
     assert.deepStrictEqual(claims.perm, {namespaces: ['com.example/'], operate: false});
     // The token publishes into the key's namespace, as mcp-publisher does next.
     const pub = await post('/v0/publish', server('com.example/weather'), {headers: bearer(res.body.registry_token)});

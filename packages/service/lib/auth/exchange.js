@@ -104,7 +104,7 @@ function createExchanges({config, secret, now, replay}) {
     // Recorded only once the signature verified (spec 10.2).
     if (replay.seen(fp, timestamp)) throw fail('replay', 'this signed timestamp was already used; sign a new one');
     const at = now();
-    const token = signJwt({sub, kind, perm}, secret, {now: at});
+    const token = signJwt({sub, kind, fp, perm}, secret, {now: at});
     return {registry_token: token, expires_at: Math.floor(at.getTime() / 1000) + 300};
   };
 

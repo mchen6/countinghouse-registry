@@ -162,6 +162,43 @@ key name or instance id (`gateway`), and the key's fingerprint: upstream's
 format, `<algorithm>:<first 8 base64 characters of the key>`. A line never
 holds a token, a signature, a key or the secret.
 
+## Operator endpoints (spec sections 6.8, 7.2 and 7.3)
+
+These need a token from a key with `operate: true`. They live under
+`/v0.1/x/io.github.mchen6/countinghouse-registry/` (and `/v0/x/…`) and send
+no CORS headers.
+
+- `GET conflicts`: every recorded conflict, where an upstream copy differs
+  from your local record. Each entry has `localSha256`, `upstreamSha256`,
+  `firstSeen`, `acknowledgedBy` and `acknowledgedAt`. A conflict never stops
+  serving; it blocks new enables of that version until you acknowledge it.
+  An upstream copy that becomes identical closes it.
+- `POST conflicts/{name}/versions/{version}/acknowledge`: records your key's
+  fingerprint and the time. Repeating it changes nothing.
+- `POST overrides/{name}/versions/{version}` with `{"keepDeleted": true}`,
+  and `DELETE` of the same path. This means "I accept this entry" for a
+  version deleted upstream or gone from it, and only for such a version
+  (409 otherwise: you accept a deletion, never one in advance). It silences the notice on
+  instances that serve it and permits new enables. It **never changes
+  public responses**: the record stays hidden, its status stays upstream's,
+  and its `changedAt` does not move.
+- `POST mirror/sync`, optionally with `{"upstream": "<name>"}`: starts a
+  mirror run now. It answers 202, 409 while a run is going, and 404 for a
+  name that is not configured (or when no upstreams are).
+- `GET mirror/upstreams`: the named state of each upstream.
+
+Reads with an operator token show more under our key. A mirrored record
+shows `upstream` (the upstream it is served from), `alsoAt` (lower-ranked
+upstreams with an identical copy) and `differsAt` (those whose copy
+differs). A record with a recorded conflict shows `conflict: true`. Public
+reads never show these, since your upstreams are your topology. Every read
+answers `Vary: Authorization`, and an operator read answers
+`Cache-Control: private, no-store`, so a caching proxy never serves an
+operator's view to the public.
+
+Each action writes an audit row (time, key fingerprint, action, subject)
+and a log line `operator.action`. Neither ever holds a token.
+
 ## Health (spec section 13.4)
 
 `GET /healthz` is **internal**: point your orchestrator's or proxy's health

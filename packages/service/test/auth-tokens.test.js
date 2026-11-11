@@ -9,19 +9,20 @@ const {createRateLimiter} = require('../lib/auth/rate-limit');
 
 const SECRET = Buffer.alloc(32, 7);
 const T0 = new Date('2026-11-10T12:00:00Z');
-const CLAIMS = {sub: 'pub', kind: 'publisher', perm: {namespaces: ['com.example/'], operate: false}};
+const CLAIMS = {sub: 'pub', kind: 'publisher', fp: 'ed25519:AAAAAAAA', perm: {namespaces: ['com.example/'], operate: false}};
 
 const part = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const hmac = (secret, s) => crypto.createHmac('sha256', secret).update(s).digest('base64url');
 
 describe('registry tokens', () => {
-  it('are HS256 JWTs valid for 5 minutes with sub, kind, perm, iat, exp and jti', () => {
+  it('are HS256 JWTs valid for 5 minutes with sub, kind, fp, perm, iat, exp and jti', () => {
     const token = signJwt(CLAIMS, SECRET, {now: T0});
     const [h, p, s] = token.split('.');
     assert.deepStrictEqual(JSON.parse(Buffer.from(h, 'base64url')), {alg: 'HS256', typ: 'JWT'});
     assert.strictEqual(s, hmac(SECRET, `${h}.${p}`));
     const claims = JSON.parse(Buffer.from(p, 'base64url'));
-    assert.deepStrictEqual(Object.keys(claims).sort(), ['exp', 'iat', 'jti', 'kind', 'perm', 'sub']);
+    assert.deepStrictEqual(Object.keys(claims).sort(), ['exp', 'fp', 'iat', 'jti', 'kind', 'perm', 'sub']);
+    assert.strictEqual(claims.fp, 'ed25519:AAAAAAAA', 'the key fingerprint, for audit (spec 9.6)');
     assert.strictEqual(claims.iat, T0.getTime() / 1000);
     assert.strictEqual(claims.exp, claims.iat + 300);
     assert.match(claims.jti, /^[A-Za-z0-9_-]{22}$/);

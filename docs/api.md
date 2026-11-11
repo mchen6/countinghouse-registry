@@ -63,6 +63,13 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and `/v0/x/…`):
   is 422 `{errors}`. A body over 1 MiB, or with more than 500 tools, is 413.
 - `GET …/records/{name}/versions/{version}` (public): the record as stored,
   or 404.
+- Operator endpoints (a token with the `operate` permission; no CORS):
+  `GET …/conflicts`, `POST …/conflicts/{name}/versions/{version}/acknowledge`,
+  `POST` and `DELETE …/overrides/{name}/versions/{version}`
+  (`{keepDeleted: true}`), `POST …/mirror/sync` (`{upstream?}`: 202, or 409
+  while running) and `GET …/mirror/upstreams`. See docs/operator.md. Any
+  read with an operator token also shows `upstream`, `alsoAt`, `differsAt`
+  and `conflict` under our key.
 - `POST …/auth/instance`: a gateway instance's token exchange,
   `{instance, timestamp, signed_timestamp}`, verified against that
   instance's configured key. It answers like the domain exchanges below,

@@ -104,7 +104,7 @@ Research §8 is the reference; in short:
 | List parameters | `cursor`, `limit` (default 30, 1–100, otherwise 422), `search`, `updated_since` (RFC 3339, otherwise 400; forces `include_deleted=true`; explicit `include_deleted=false` with it is 400), `version` (`latest` or exact), `include_deleted` (default false). |
 | Search | Case-insensitive substring of `name`; a nonempty value needs ≥3 Unicode characters after trimming, otherwise 422 with upstream's detail text. Backed by an SQLite FTS5 `trigram` table on names. |
 | Order | One record per server version, ordered by `name`, then `version`, ascending, **bytewise** (UTF-8 byte order: SQLite `BINARY`); documented as such. `/versions` is ordered by `publishedAt` descending. |
-| `updated_since` here | Filters on the record's **local change time** `changedAt` (served under our key, 5.2), not on the served `updatedAt`, which stays upstream's for mirrored records. `changedAt` moves on every change applied here (mirror apply, origin change, status overlay, override, local publish or status change), not on hosting-count changes. A deliberate superset: a downstream registry may receive records whose `updatedAt` is older than its checkpoint (it dedupes by name + version) but never misses one that reached us late, e.g. during our first sync. The API docs say so. Being a time filter, it keeps upstream's narrow race (a write whose `changedAt` is set before a reader's snapshot but which commits after it); the API docs repeat upstream's advice to downstream syncs to keep a small overlap. The exact, sequence-based watermark is used where we define the contract (9.4). |
+| `updated_since` here | Filters on the record's **local change time** `changedAt` (served under our key, 5.2), not on the served `updatedAt`, which stays upstream's for mirrored records. `changedAt` moves on every change applied here (mirror apply, origin change, status overlay, local publish or status change), not on hosting-count changes, and not on a `keepDeleted` override, which never changes public responses (7.3). A deliberate superset: a downstream registry may receive records whose `updatedAt` is older than its checkpoint (it dedupes by name + version) but never misses one that reached us late, e.g. during our first sync. The API docs say so. Being a time filter, it keeps upstream's narrow race (a write whose `changedAt` is set before a reader's snapshot but which commits after it); the API docs repeat upstream's advice to downstream syncs to keep a small overlap. The exact, sequence-based watermark is used where we define the contract (9.4). |
 | Cursor | Opaque; its format is the builder's. End of list: `nextCursor` absent. `metadata.count` = records in the page; `metadata` carries nothing else. |
 | Record | `{server: <server.json as stored>, _meta: {"io.modelcontextprotocol.registry/official": {...}, "io.github.mchen6/countinghouse-registry": {...}}}` (section 5). |
 | Status | `deleted` records are hidden unless `include_deleted`; a deleted version is never `isLatest` while a non-deleted version exists. |
@@ -305,7 +305,9 @@ registry of local records only **(implementer's call)**.
   upstream's name) and `alsoAt` (lower-precedence upstreams whose copy is
   identical: `server` objects equal as canonical JSON with `_meta` reduced
   to `publisher-provided`, the 7.2 rule); a lower-precedence copy that
-  differs is an operator-only conflict, the same shape as 7.2's.
+  differs is an operator-only conflict, listed as `differsAt` on the same
+  reads. The named per-upstream mirror state is
+  `GET /v0.1/x/<ns>/mirror/upstreams` (operator).
 - **Config changes, applied at startup.** A changed order rebuilds every
   served mirrored record. An upstream removed from the list loses its copies
   and state; records only it had become `gone-upstream` (still served as
@@ -669,8 +671,9 @@ limiting needs in memory.
 - HS256 JWTs made with `node:crypto` only (no JWT library), valid **5
   minutes** for every kind of token (gateways re-sign about every four
   minutes). Claims: `sub` (key name or instance id), `kind`
-  (`publisher` | `instance`), `perm` (namespaces, operate, or instance id),
-  `iat`, `exp`, `jti`.
+  (`publisher` | `instance`), `fp` (the key's fingerprint, for audit rows: a
+  public-key prefix, so a token carries nothing secret), `perm` (namespaces,
+  operate, or instance id), `iat`, `exp`, `jti`.
 - The signing secret follows countinghouse's secret-file discipline exactly
   (countinghouse `lib/identity.js`, R2-1 task 1,
   `docs/superpowers/specs/2026-11-07-r2-1-no-raw-keys-in-modules-design.md`):

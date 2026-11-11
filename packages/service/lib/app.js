@@ -9,7 +9,8 @@ const {serversRouter} = require('./read/servers');
 const {toServerResponse} = require('./read/response');
 const {mirrorState, mirrorSummary} = require('./mirror/sync');
 const {writeRouter, recordReadRouter} = require('./publish/routes');
-const {denyAll} = require('./auth/permissions');
+const {denyAll, allows} = require('./auth/permissions');
+const {operatorRouter, operatorDetail} = require('./operator/routes');
 
 const X = '/x/io.github.mchen6/countinghouse-registry';
 
@@ -39,7 +40,8 @@ const BODY_ERRORS = {
 // `auth` (lib/auth/middleware.js createAuth, or the tests' fakeAuth) decides the
 // write routes and, when it has a router, serves the token exchanges; without
 // one, nothing authenticates.
-function createApp({store, config, log, auth = denyAll, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
+// `mirror` (createMirror) answers "sync now".
+function createApp({store, config, log, auth = denyAll, mirror = null, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
@@ -50,10 +52,23 @@ function createApp({store, config, log, auth = denyAll, versionInfo = defaultVer
   // limiter's memory (spec 9.6).
   app.set('trust proxy', config.listen.trustProxy === true ? 1 : false);
 
-  const view = async (row) => toServerResponse(row, {publicHosting: config.publicHosting});
+  // A read with a valid operate token is an operator read (6.8, 7.2); any other
+  // read, including one with a bad token, is public.
+  const view = async (row, req) => {
+    if (!(req && req.operatorRead)) return toServerResponse(row, {publicHosting: config.publicHosting});
+    return toServerResponse(row, {publicHosting: config.publicHosting, operator: true, ...(await operatorDetail(store, row))});
+  };
 
   const read = express.Router();
   read.use(readCors);
+  // A read's body depends on its token, so caches key on it, and an operator
+  // read (the upstream topology) is never stored by a shared cache.
+  read.use((req, res, next) => {
+    res.vary('Authorization');
+    req.operatorRead = Boolean(req.get('authorization')) && allows(auth.actor(req), 'operate');
+    if (req.operatorRead) res.set('Cache-Control', 'private, no-store');
+    next();
+  });
   read.use(serversRouter({store, log, view}));
   read.use(recordReadRouter({store, log}));
   read.get('/ping', (req, res) => sendJson(res, 200, {pong: true}));
@@ -69,8 +84,10 @@ function createApp({store, config, log, auth = denyAll, versionInfo = defaultVer
 
   // The write routes first: they send no CORS headers (spec 4.1).
   const write = writeRouter({store, config, log, auth, now, view});
+  const operator = operatorRouter({store, config, log, auth, now, mirror});
   for (const prefix of ['/v0.1', '/v0']) {
     if (auth.router) app.use(prefix, auth.router);
+    app.use(`${prefix}${X}`, operator);
     app.use(prefix, write, read);
   }
 
