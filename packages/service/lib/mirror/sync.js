@@ -23,6 +23,7 @@
 // transaction (sources.js). State, cursor, checkpoint, pass count and guard are
 // the upstream's own row of mirror_upstreams.
 const {rebuildNames} = require('./sources');
+const {conflictLogger} = require('../publish/conflicts');
 
 const OFFICIAL = 'io.modelcontextprotocol.registry/official';
 const OVERLAP_MS = 5 * 60 * 1000;
@@ -92,7 +93,7 @@ async function fail(store, log, upstream, code, extra) {
   return {state: 'failed'};
 }
 
-async function applyPage(store, upstream, page, runMode, passNo, nowIso) {
+async function applyPage(store, log, upstream, page, runMode, passNo, nowIso) {
   await store.write(async (tx) => {
     const changed = [];
     for (const r of page.servers) {
@@ -106,7 +107,7 @@ async function applyPage(store, upstream, page, runMode, passNo, nowIso) {
         changed.push(r.server.name);
       }
     }
-    await rebuildNames(tx, changed, nowIso);
+    await rebuildNames(tx, changed, nowIso, {onConflict: conflictLogger(log)});
     await setState(tx, upstream, page.nextCursor ? {cursor: page.nextCursor} : {cursor: null, pages_done: 1});
   });
 }
@@ -135,13 +136,13 @@ async function finish(store, log, upstream, st, runMode, start, passNo, now, atH
           if (await upsertCopy(tx, upstream, r.name, r.version, r.server, r.official, nowIso, passNo)) changed.push(r.name);
           await tx.run('DELETE FROM reconcile_stage WHERE upstream = ? AND pass_no = ? AND name = ? AND version = ?', [upstream, passNo, r.name, r.version]);
         }
-        await rebuildNames(tx, changed, nowIso);
+        await rebuildNames(tx, changed, nowIso, {onConflict: conflictLogger(log)});
       });
     }
     await store.write(async (tx) => {
       const gone = await tx.all(`UPDATE record_sources SET hidden_reason = 'gone-upstream'
         WHERE upstream = ? AND hidden_reason IS NULL AND (seen_pass IS NULL OR seen_pass <> ?) RETURNING name`, [upstream, passNo]);
-      await rebuildNames(tx, gone.map((g) => g.name), nowIso);
+      await rebuildNames(tx, gone.map((g) => g.name), nowIso, {onConflict: conflictLogger(log)});
     });
   }
   await store.write(async (tx) => {
@@ -194,7 +195,7 @@ async function runSync(store, client, log, {upstream = 'official', mode = null, 
         if (err.code === 'aborted') return {state: 'syncing'};
         return fail(store, log, upstream, err.code || 'network', {status: err.status || null, page: pageNo, mode: runMode});
       }
-      await applyPage(store, upstream, page, runMode, passNo, now().toISOString());
+      await applyPage(store, log, upstream, page, runMode, passNo, now().toISOString());
       log.debug('mirror.page', 'applied one page', {upstream, page: pageNo, count: page.servers.length, mode: runMode});
       st = {...st, cursor: page.nextCursor, pagesDone: !page.nextCursor};
     }

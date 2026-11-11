@@ -6,7 +6,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const {validateServerJson, validateWith, reduceMeta, CURRENT_SCHEMA} = require('../lib/validate');
+const {validateServerJson, validateWith, reduceMeta, decodeErrors, CURRENT_SCHEMA} = require('../lib/validate');
 const {pointerToPath} = require('../lib/validate/schema');
 const {goJsonSize} = require('../lib/go-json-size');
 
@@ -195,12 +195,33 @@ describe('server.json validation', () => {
       assert.ok(refs(mcpb('https://github.com/o/r/releases/download/v1/a%2Fb-mcp.mcpb')).includes('registry-mcpb-invalid-release-url'));
     });
 
-    it('an OCI registry is a first component holding "." or ":"; tags are [A-Za-z0-9_.-]', () => {
+    // go-containerregistry v0.22.1 (8a72a424fdecb4caa14f2d525e5d2503331442b5, the version
+    // upstream's go.mod pins): pkg/name/ref.go ParseReference, tag.go NewTag/checkTag,
+    // repository.go NewRepository/checkRepository, registry.go NewRegistry/checkRegistry,
+    // digest.go NewDigest, check.go checkElement.
+    it('OCI references parse as go-containerregistry v0.22.1 pkg/name does', () => {
       const oci = (identifier) => validateServerJson(server({packages: [{registryType: 'oci', identifier, transport: {type: 'stdio'}}]}));
-      assert.strictEqual(oci('localhost/foo:1').valid, true, JSON.stringify(oci('localhost/foo:1').issues));
-      assert.strictEqual(oci('ghcr.io/a/b:-x').valid, true, JSON.stringify(oci('ghcr.io/a/b:-x').issues));
-      assert.ok(refs(oci('localhost:5000/foo:1')).includes('registry-unsupported-oci-registry'));
-      assert.ok(refs(oci('ghcr.io/a/B:1')).includes('registry-invalid-oci-reference'));
+      const ok = (id) => assert.strictEqual(oci(id).valid, true, `${id}: ${JSON.stringify(oci(id).issues)}`);
+      const bad = (id, ref) => assert.ok(refs(oci(id)).includes(ref), `${id}: ${JSON.stringify(oci(id).issues)}`);
+      ok('foo/bar:1'); // no '.', ':' or localhost in the first part: Docker Hub
+      ok('nginx'); // the default tag, library/ namespace
+      ok('ghcr.io/a/b:-x'); // tag runes [A-Za-z0-9_.-], 1-128, any first rune
+      ok(`docker.io/a/b@sha256:${'a'.repeat(64)}`);
+      ok(`ghcr.io/a/b:1.0@sha256:${'b'.repeat(64)}`);
+      bad('localhost/foo:1', 'registry-unsupported-oci-registry'); // "localhost" is a registry
+      bad('localhost:5000/foo:1', 'registry-unsupported-oci-registry');
+      bad('ghcr.io/a/B:1', 'registry-invalid-oci-reference'); // repository runes are lowercase
+      bad('ghcr.io/a/b:', 'registry-invalid-oci-reference'); // empty tag after the colon
+      bad(`ghcr.io/a/b:${'x'.repeat(129)}`, 'registry-invalid-oci-reference');
+      bad('https://ghcr.io/a/b:1', 'registry-invalid-oci-reference'); // a URL scheme
+      bad('ghcr.io/a/b@sha256:abc', 'registry-invalid-oci-reference');
+      bad('gh cr.io/a/b:1', 'registry-invalid-oci-reference');
+      // repository.go checkRepository is checkElement(..., 1, 255) at v0.22.1; NewDigest
+      // validates with opencontainers/go-digest v1.0.0, whose sha384 and sha512 are
+      // available in upstream's binary (crypto/sha512 is linked through crypto/tls).
+      ok('ghcr.io/a:1');
+      ok(`ghcr.io/a/b@sha512:${'c'.repeat(128)}`);
+      bad(`ghcr.io/a/b@md5:${'c'.repeat(32)}`, 'registry-invalid-oci-reference');
     });
 
     it('a parse error quotes the URL without its fragment, as Go does', () => {
@@ -209,6 +230,57 @@ describe('server.json validation', () => {
       assert.ok(issue, JSON.stringify(r.issues));
       assert.strictEqual(issue.message, 'invalid websiteUrl: parse "https://a%zz/": invalid URL escape "%zz"');
     });
+  });
+
+  // Upstream decodes the body into its Go structs (huma v2), which refuses any
+  // property the structs do not have, before validating: probed against the
+  // official POST /v0.1/validate on 2026-11-11, both answered 422 "unexpected property".
+  describe('refuses unknown properties, as upstream decodes the body', () => {
+    it('decodeErrors names each unexpected property as huma does', () => {
+      assert.deepStrictEqual(decodeErrors(server()), []);
+      const doc = server({unknownField: 1, _meta: {[PP]: {free: {form: true}}, 'com.example/other': {b: 2}},
+        repository: {url: 'https://github.com/example/weather', source: 'github', branch: 'main'},
+        packages: [{registryType: 'npm', identifier: 'x', version: '1.0.0', transport: {type: 'stdio', extra: 1},
+          runtimeArguments: [{type: 'positional', value: 'a', bogus: true}], environmentVariables: [{name: 'A', variables: {v: {value: 'x', nope: 1}}}]}],
+        icons: [{src: 'https://example.com/i.png', alt: 'x'}]});
+      assert.deepStrictEqual(decodeErrors(doc).map((e) => e.location).sort(), [
+        'body._meta.com.example/other', 'body.icons[0].alt', 'body.packages[0].environmentVariables[0].variables.v.nope',
+        'body.packages[0].runtimeArguments[0].bogus', 'body.packages[0].transport.extra', 'body.repository.branch', 'body.unknownField'].sort());
+      const top = decodeErrors(server({unknownField: 1}))[0];
+      assert.strictEqual(top.message, 'unexpected property');
+      assert.deepStrictEqual(top.value, server({unknownField: 1}));
+    });
+
+    it('validateServerJson refuses them, for publish and for /validate', () => {
+      for (const forPublish of [true, false]) {
+        const r = validateServerJson(server({unknownField: 1}), {forPublish});
+        assert.strictEqual(r.valid, false);
+        const i = r.issues.find((x) => x.reference === 'unexpected-property');
+        assert.deepStrictEqual({type: i.type, path: i.path}, {type: 'schema', path: 'unknownField'});
+      }
+    });
+
+    it('accepts every property of the Go structs', () => {
+      const full = server({title: 'Weather', websiteUrl: 'https://example.com', icons: [{src: 'https://example.com/i.png', mimeType: 'image/png', sizes: ['48x48'], theme: 'light'}],
+        repository: {url: 'https://github.com/example/weather', source: 'github', id: 'x', subfolder: 'a'},
+        packages: [{registryType: 'npm', registryBaseUrl: 'https://registry.npmjs.org', identifier: 'x', version: '1.0.0', runtimeHint: 'npx',
+          transport: {type: 'stdio'}, runtimeArguments: [{type: 'named', name: '--a', value: 'b', valueHint: 'h', isRepeated: true, description: 'd',
+            isRequired: true, format: 'string', isSecret: false, default: 'c', placeholder: 'p', choices: ['b', 'c'], variables: {}}],
+          packageArguments: [], environmentVariables: [{name: 'A', description: 'd', value: 'v'}]}],
+        remotes: [{type: 'streamable-http', url: 'https://example.com/mcp', headers: [{name: 'X-A', value: 'v'}], variables: {}}],
+        _meta: {[PP]: {anything: [1, {deep: true}]}}});
+      assert.deepStrictEqual(decodeErrors(full), []);
+    });
+  });
+
+  it('a document nested deeper than 64 levels is one issue, and nothing recurses into it', () => {
+    let deep = {};
+    for (let i = 0; i < 200000; i++) deep = {a: deep};
+    for (const forPublish of [true, false]) {
+      const r = validateServerJson(server({_meta: {[PP]: deep}}), {forPublish});
+      assert.strictEqual(r.valid, false);
+      assert.deepStrictEqual(r.issues.map((i) => i.reference), ['document-too-deep']);
+    }
   });
 
   it('a non-object document is one schema issue, not a crash', () => {

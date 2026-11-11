@@ -4,7 +4,7 @@ const express = require('express');
 const {sendJson, problem, handle} = require('../http/problem');
 const {parseListParams, parseIncludeDeleted} = require('./params');
 
-const COLUMNS = 'id, source, name, version, server, official, origin, changed_at, mirrored_at, hidden_reason';
+const {ROW_COLUMNS: COLUMNS} = require('./response');
 const VISIBLE = "hidden_reason IS NULL AND json_extract(official, '$.status') <> 'deleted'";
 
 function encodeCursor(name, version) {

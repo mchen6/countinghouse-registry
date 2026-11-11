@@ -9,6 +9,8 @@ const {createLogger} = require('../lib/log');
 const {createUpstreamClient} = require('../lib/mirror/client');
 const {createMirror} = require('../lib/mirror/scheduler');
 const {applyUpstreams} = require('../lib/mirror/sources');
+const {conflictLogger} = require('../lib/publish/conflicts');
+const {applyClaims, ClaimError} = require('../lib/publish/namespaces');
 const pkg = require('../package.json');
 
 async function main() {
@@ -26,9 +28,18 @@ async function main() {
     process.exit(2);
   }
   const store = await openStore(config.store.path);
-  // The configured upstream list (order, additions, removals, url changes) is
-  // applied before anything is served (spec section 6.8).
-  const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString());
+  // The claimed namespaces (spec 13.3: a removed claim holding local records
+  // refuses startup) and then the configured upstream list (order, additions,
+  // removals, url changes, spec 6.8) are applied before anything is served.
+  try {
+    await applyClaims(store, config.claims, new Date().toISOString());
+  } catch (err) {
+    if (!(err instanceof ClaimError)) throw err;
+    process.stderr.write(`countinghouse-registry: ${err.message}\n`);
+    await store.close();
+    process.exit(2);
+  }
+  const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString(), {onConflict: conflictLogger(log)});
   if (rebuilt) log.info('mirror.upstreams', 'applied the upstream list', {upstreams: config.upstreams.length});
   const app = createApp({store, config, log});
   const userAgent = `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`;

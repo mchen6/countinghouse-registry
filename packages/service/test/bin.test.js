@@ -73,6 +73,28 @@ describe('service binary', () => {
     assert.deepStrictEqual(await exited, {code: 0, signal: null}, out);
   }).timeout(20000);
 
+  it('refuses to start, exit 2 listing the names, when a removed claim still has local records (spec 13.3)', async () => {
+    const db = path.join(dir, 'claims.db');
+    const {openStore} = require('../lib/store');
+    const {applyClaims} = require('../lib/publish/namespaces');
+    const store = await openStore(db);
+    await store.write((tx) => tx.run(`INSERT INTO records (source, name, version, server, official, origin, changed_at)
+      VALUES ('local', 'io.github.gone/srv', '1.0.0', '{}', '{"status":"active","isLatest":true}', 'local', '2026-11-10T00:00:00.000Z')`));
+    await applyClaims(store, ['io.github.gone/'], '2026-11-10T00:00:00.000Z');
+    await store.close();
+    const config = path.join(dir, 'claims.json');
+    fs.writeFileSync(config, JSON.stringify({store: {path: db}, upstreams: [], claims: [], listen: {host: '127.0.0.1', port: await freePort()}}));
+    const c = spawn(process.execPath, [BIN, '--config', config], {stdio: ['ignore', 'pipe', 'pipe']});
+    let err = '';
+    c.stderr.on('data', (d) => { err += d; });
+    // A binary that starts anyway is stopped, so the test fails rather than hangs.
+    const timer = setTimeout(() => c.kill('SIGKILL'), 10000);
+    const code = await new Promise((r) => c.on('exit', r));
+    clearTimeout(timer);
+    assert.strictEqual(code, 2, err);
+    assert.match(err, /io\.github\.gone\/srv/);
+  }).timeout(20000);
+
   it('refuses a bad config with exit 2 and the field', async () => {
     const config = path.join(dir, 'bad.json');
     fs.writeFileSync(config, JSON.stringify({store: {path: path.join(dir, 'x.db')}, upstreams: [{name: 'a', url: 'https://a.example', intervalMinutes: 1}]}));

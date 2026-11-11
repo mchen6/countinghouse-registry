@@ -8,6 +8,8 @@ const {readCors} = require('./http/cors');
 const {serversRouter} = require('./read/servers');
 const {toServerResponse} = require('./read/response');
 const {mirrorState, mirrorSummary} = require('./mirror/sync');
+const {writeRouter, recordReadRouter} = require('./publish/routes');
+const {denyAll} = require('./auth/permissions');
 
 const X = '/x/io.github.mchen6/countinghouse-registry';
 
@@ -28,7 +30,15 @@ async function storeOk(store) {
   }
 }
 
-function createApp({store, config, log, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
+// Body errors from express.json, answered as problem+json with their own detail.
+const BODY_ERRORS = {
+  'entity.parse.failed': [400, 'The request body is not valid JSON'],
+  'entity.too.large': [413, 'The request body exceeds 1 MiB']
+};
+
+// `auth` (Task 6, or the tests' fakeAuth) decides the write routes; without one,
+// nothing authenticates.
+function createApp({store, config, log, auth = denyAll, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
@@ -39,6 +49,7 @@ function createApp({store, config, log, versionInfo = defaultVersionInfo(), now 
   const read = express.Router();
   read.use(readCors);
   read.use(serversRouter({store, log, view}));
+  read.use(recordReadRouter({store, log}));
   read.get('/ping', (req, res) => sendJson(res, 200, {pong: true}));
   read.get('/version', (req, res) => sendJson(res, 200, versionInfo));
   read.get(`${X}/mirror`, handle(log, 'Failed to read the mirror state', async (req, res) => {
@@ -50,7 +61,9 @@ function createApp({store, config, log, versionInfo = defaultVersionInfo(), now 
     else sendJson(res, 503, {status: 'error'});
   });
 
-  for (const prefix of ['/v0.1', '/v0']) app.use(prefix, read);
+  // The write routes first: they send no CORS headers (spec 4.1).
+  const write = writeRouter({store, config, log, auth, now, view});
+  for (const prefix of ['/v0.1', '/v0']) app.use(prefix, write, read);
 
   app.get('/healthz', async (req, res) => {
     // Internal (the operator docs say not to expose it): the aggregate plus the
@@ -67,6 +80,9 @@ function createApp({store, config, log, versionInfo = defaultVersionInfo(), now 
   // Errors raised before a handler runs (a path segment that is not valid
   // percent-encoding) answer as problem+json, never Express's HTML page.
   app.use((err, req, res, next) => {
+    if (BODY_ERRORS[err.type]) return problem(res, ...BODY_ERRORS[err.type]);
+    // Any other body-parser error (encoding, charset, an aborted request).
+    if (err.type && err.status >= 400 && err.status < 500) return problem(res, err.status, 'The request body could not be read');
     if (err instanceof URIError || err.status === 400) return problem(res, 400, 'Invalid server name encoding');
     log.error('http.error', 'an unhandled request error', {code: err.code || err.name});
     return problem(res, 500, 'Internal server error');

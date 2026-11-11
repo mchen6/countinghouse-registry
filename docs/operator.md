@@ -65,6 +65,25 @@ Registry only.
   `lastSuccessAt`, `lag`, `lastError` (`network`, `http-4xx`, `http-5xx`,
   `http-429`, `bad-page`, `upstream-shrank`, `store`) and `upstreamVersion`.
 
+## Claimed namespaces (spec sections 7.1 and 13.3)
+
+`claims` lists the namespace prefixes you publish into here, such as
+`io.github.<you>/`. A claim is a routing rule for this registry only: it
+grants nothing on the official registry, whose own ownership checks still
+apply to anything you push there. In a claimed namespace, your local
+records take precedence over every upstream copy, and `isLatest` is
+computed here over local and mirrored versions together.
+
+Claims are applied at each start:
+- **Added claim.** `isLatest` is recomputed for the names it covers.
+- **Removed claim.** If the claim still holds local records, the service
+  refuses to start (exit 2) and lists those names, so that you resolve
+  them explicitly.
+
+When an upstream copy of one of your versions differs from your record,
+your record is still served. The service logs `publish.conflict` once, at
+warn level, with the first 12 hex digits of both hashes.
+
 ## Health (spec section 13.4)
 
 `GET /healthz` is **internal**: point your orchestrator's or proxy's health

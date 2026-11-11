@@ -379,6 +379,13 @@ name, in the same transaction.
 A `POST /v0.1/publish` (operator JWT with publish permission for the name's
 claimed namespace) runs, in order, collecting all issues:
 
+0. **Decode**: no property upstream's Go structs lack (`ServerJSON`,
+   `ServerMeta` and the `pkg/model` types at `7e8fa024`; `publisher-provided`
+   is free-form). Upstream decodes the body through huma v2, which refuses an
+   unknown property with 422 `unexpected property` before any validator runs:
+   probed against the official `POST /v0.1/validate` on 2026-11-11 with an
+   unknown top-level field and with a `_meta` key beside `publisher-provided`;
+   both were refused. The same holds for our `POST /v0.1/validate`.
 1. **Schema**: `$schema` must be exactly
    `https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json`;
    anything else is 422 naming the current URL. Validation against the
@@ -390,8 +397,8 @@ claimed namespace) runs, in order, collecting all issues:
    `internal/validators/validators.go` at commit `7e8fa024`, ported with its
    upstream rule id as `reference` (e.g. `version-looks-like-range`), so
    details read as upstream's.
-3. **Registry rules**: upstream's base-URL allow-lists, unchanged;
-   `_meta` reduced to `publisher-provided` (other keys dropped, as upstream);
+3. **Registry rules**: upstream's base-URL allow-lists, unchanged (the
+   checks each registry's validator makes before it fetches anything);
    `publisher-provided` ≤4096 bytes of compact JSON (counted as Go's
    `json.Marshal` counts: UTF-8, `<` `>` `&` escaped), otherwise 422 with
    the size.

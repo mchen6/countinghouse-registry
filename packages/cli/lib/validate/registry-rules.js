@@ -59,33 +59,74 @@ function baseURLPackage(type, pkg) {
   return null;
 }
 
-// go-containerregistry's name.ParseReference (default, non-strict options), as far
-// as the registry it names: "[registry/]repository[:tag|@sha256:digest]". The first
-// component is the registry only when it holds '.' or ':' (else Docker Hub); a tag
-// is 1-128 of [A-Za-z0-9_.-]; a repository 2-255 of [a-z0-9_./-].
-function ociRegistry(ref) {
-  const bad = {error: `could not parse reference: ${ref}`};
-  let name = ref;
-  const at = name.indexOf('@');
-  if (at >= 0) {
-    if (!/^sha256:[0-9a-f]{64}$/.test(name.slice(at + 1))) return bad;
-    name = name.slice(0, at);
-  }
-  const colon = name.lastIndexOf(':');
-  if (colon > name.lastIndexOf('/')) {
-    if (!/^[A-Za-z0-9_.-]{1,128}$/.test(name.slice(colon + 1))) return bad;
-    name = name.slice(0, colon);
-  }
-  const slash = name.indexOf('/');
-  let registry = 'index.docker.io';
+// go-containerregistry's name.ParseReference with default (weak) options, as at
+// v0.22.1 (8a72a424fdecb4caa14f2d525e5d2503331442b5, upstream's go.mod pin):
+// pkg/name/ref.go, tag.go, repository.go, registry.go, digest.go, check.go.
+// -> {registry} (RegistryStr) or {error}.
+const TAG_CHARS = /^[a-z0-9_.A-Z-]*$/;
+const REPOSITORY_CHARS = /^[a-z0-9_./-]*$/;
+const runes = (s) => [...s].length;
+
+class BadName extends Error {}
+
+function checkElement(what, element, chars, min, max) {
+  const n = runes(element);
+  if (n < min || n > max) throw new BadName(`${what} must be between ${min} and ${max} characters in length: ${element}`);
+  if (!chars.test(element)) throw new BadName(`${what} can only contain the characters of ${chars.source}: ${element}`);
+}
+
+function newRegistry(name) {
+  // checkRegistry: a valid RFC 3986 authority, as url.Parse("//" + name) reads it.
+  const u = goParseURL(`//${name}`);
+  if (u.error || u.host !== name) throw new BadName(`registries must be valid RFC 3986 URI authorities: ${name}`);
+  if (name === '' || name === 'docker.io') return 'index.docker.io';
+  return name;
+}
+
+function newRepository(name) {
+  if (name.length === 0) throw new BadName('a repository name must be specified');
+  let registry = '';
   let repo = name;
+  const slash = name.indexOf('/');
   if (slash >= 0) {
-    const first = name.slice(0, slash);
-    if (first.includes('.') || first.includes(':')) { registry = first; repo = name.slice(slash + 1); }
+    const maybe = name.slice(0, slash);
+    if (maybe === 'localhost' || /[.:]/.test(maybe)) { registry = maybe; repo = name.slice(slash + 1); }
   }
-  if (!/^[a-z0-9_./-]{2,255}$/.test(repo)) return bad;
-  if (registry === 'docker.io') registry = 'index.docker.io';
-  return {registry};
+  checkElement('repository', repo, REPOSITORY_CHARS, 1, 255);
+  return newRegistry(registry);
+}
+
+function newTag(name) {
+  const parts = name.split(':');
+  let base = name;
+  if (parts.length > 1 && !parts[parts.length - 1].includes('/')) {
+    const tag = parts[parts.length - 1];
+    base = parts.slice(0, -1).join(':');
+    if (tag === '') throw new BadName(`${name} must specify a tag name after the colon`);
+    checkElement('tag', tag, TAG_CHARS, 1, 128);
+  }
+  return newRepository(base);
+}
+
+// opencontainers/go-digest Validate, for the algorithms it registers.
+const DIGEST = /^(sha256:[a-f0-9]{64}|sha384:[a-f0-9]{96}|sha512:[a-f0-9]{128})$/;
+
+function newDigest(name) {
+  const parts = name.split('@');
+  if (parts.length !== 2) throw new BadName(`a digest must contain exactly one '@' separator (e.g. registry/repository@digest) saw: ${name}`);
+  if (!DIGEST.test(parts[1])) throw new BadName(`invalid digest: ${parts[1]}`);
+  try { return newTag(parts[0]); } catch (err) { if (!(err instanceof BadName)) throw err; }
+  return newRepository(parts[0]);
+}
+
+function ociRegistry(ref) {
+  if (ref.startsWith('http://') || ref.startsWith('https://')) {
+    return {error: `image reference must not contain a URL scheme (http:// or https://): ${ref}; to connect to a registry over plain HTTP, use name.Insecure`};
+  }
+  for (const parse of [newTag, newDigest]) {
+    try { return {registry: parse(ref)}; } catch (err) { if (!(err instanceof BadName)) throw err; }
+  }
+  return {error: `could not parse reference: ${ref}`};
 }
 
 const OCI_REGISTRIES = new Set(['docker.io', 'registry-1.docker.io', 'index.docker.io', 'ghcr.io', 'quay.io', 'mcr.microsoft.com']);
