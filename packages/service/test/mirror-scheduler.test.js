@@ -116,4 +116,46 @@ describe('mirror scheduler', () => {
     assert.ok(lines.some((l) => JSON.parse(l).event === 'mirror.run.error'));
     await s.stop();
   });
+
+  const modeAt = async (iso, lastReconcile, extra = '') => {
+    await store.write((tx) => tx.run(`UPDATE mirror_state SET first_sync_done = 1, last_reconcile_at = ? WHERE id = 1`, [lastReconcile]));
+    if (extra) await store.write((tx) => tx.run(extra));
+    clock = Date.parse(iso);
+    const s = make();
+    s.runNow();
+    await until(() => runs.length > 0);
+    const m = runs[runs.length - 1].mode;
+    release();
+    await until(() => timers.length === 1);
+    await s.stop();
+    runs.length = 0;
+    timers = [];
+    return m;
+  };
+
+  it('a reconcile due at atHour still runs when the first run after it starts later', async () => {
+    assert.strictEqual(await modeAt('2026-11-10T04:00:00.000Z', '2026-11-03T03:10:00.000Z'), 'reconcile');
+    assert.strictEqual(await modeAt('2026-11-12T17:00:00.000Z', '2026-11-03T03:10:00.000Z'), 'reconcile');
+  });
+
+  it('the first reconcile comes everyDays after the first sync, at atHour', async () => {
+    assert.strictEqual(await modeAt('2026-11-17T02:59:00.000Z', '2026-11-10T10:00:00.000Z'), 'incremental');
+    assert.strictEqual(await modeAt('2026-11-17T03:00:00.000Z', '2026-11-10T10:00:00.000Z'), 'reconcile');
+  });
+
+  it('after an upstream-shrank pass, reconcile is retried the next day, not within the hour', async () => {
+    const shrank = "INSERT INTO meta_kv (k, v) VALUES ('mirror_reconcile_retry_at', '2026-11-11T03:00:00.000Z')";
+    assert.strictEqual(await modeAt('2026-11-10T03:30:00.000Z', '2026-11-03T03:10:00.000Z', shrank), 'incremental');
+    assert.strictEqual(await modeAt('2026-11-11T03:10:00.000Z', '2026-11-03T03:10:00.000Z'), 'reconcile');
+  });
+
+  it('stop aborts the run it waits for', async () => {
+    const s = make();
+    s.start();
+    await until(() => runs.length === 1);
+    const p = s.stop();
+    assert.strictEqual(runs[0].signal.aborted, true);
+    release();
+    await p;
+  });
 });

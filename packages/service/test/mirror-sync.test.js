@@ -23,7 +23,8 @@ function fakeClient(pages, {failOn = null, version = '1.8.9'} = {}) {
   const calls = [];
   return {
     calls,
-    page: async ({cursor = null, updatedSince = null} = {}) => {
+    page: async ({cursor = null, updatedSince = null, signal = null} = {}) => {
+      if (signal && signal.aborted) throw Object.assign(new Error('aborted'), {code: 'aborted'});
       calls.push({cursor, updatedSince});
       const key = cursor || '';
       if (failOn !== null && failOn === key) throw new UpstreamError('http-5xx', 503);
@@ -241,5 +242,87 @@ describe('mirror sync', () => {
     assert.strictEqual(failed.status, 503);
     assert.strictEqual(failed.page, 2);
     assert.ok(!lines.join('').includes('a/x'), 'a record name reached the log');
+  });
+
+  it('a shrunken reconcile pass applies nothing it saw, not even content updates or un-hiding', async () => {
+    const five = three();
+    five.c2.servers.push(rec('e/x', '1'));
+    await runSync(store, fakeClient(five), log, {now});
+    await store.write((tx) => tx.run("UPDATE records SET hidden_reason = 'gone-upstream' WHERE name = 'b/x'"));
+    clock += 3600000;
+    const changed = rec('a/x', '1', {updatedAt: '2026-11-09T00:00:00Z'});
+    changed.server.description = 'from the reset upstream';
+    const r = await runSync(store, fakeClient({'': {servers: [changed, rec('b/x', '1')], nextCursor: null}}), log, {now, mode: 'reconcile'});
+    assert.strictEqual(r.state, 'failed');
+    const [a] = await store.read("SELECT server FROM records WHERE name = 'a/x'");
+    assert.strictEqual(JSON.parse(a.server).description, 'd', 'content from the reset upstream was applied');
+    const [b] = await store.read("SELECT hidden_reason FROM records WHERE name = 'b/x'");
+    assert.strictEqual(b.hidden_reason, 'gone-upstream', 'a record was un-hidden by a reset upstream');
+  });
+
+  it('a reconcile pass applies what it saw once the guard passes', async () => {
+    await runSync(store, fakeClient(three()), log, {now});
+    clock += 3600000;
+    const changed = rec('a/x', '1', {updatedAt: '2026-11-09T00:00:00Z'});
+    changed.server.description = 'updated';
+    const pages = three();
+    pages[''].servers[0] = changed;
+    pages.c2.servers.push(rec('e/x', '1'));
+    const r = await runSync(store, fakeClient(pages), log, {now, mode: 'reconcile'});
+    assert.strictEqual(r.state, 'idle');
+    const [a] = await store.read("SELECT server FROM records WHERE name = 'a/x'");
+    assert.strictEqual(JSON.parse(a.server).description, 'updated');
+    assert.deepStrictEqual(await names(), ['a/x@1', 'b/x@1', 'c/x@1', 'd/x@1', 'e/x@1']);
+  });
+
+  it('a store failure during a run is recorded as failed, not left as syncing', async () => {
+    const realWrite = store.write;
+    let n = 0;
+    store.write = (fn) => (++n === 3 ? Promise.reject(Object.assign(new Error('full'), {code: 'SQLITE_FULL'})) : realWrite(fn));
+    const r = await runSync(store, fakeClient(three()), log, {now});
+    store.write = realWrite;
+    assert.strictEqual(r.state, 'failed');
+    const m = await mirrorState(store, now());
+    assert.strictEqual(m.state, 'failed');
+    assert.strictEqual(m.lastError, 'store');
+  });
+
+  it('a crash after the last page resumes by finishing, not by starting over', async () => {
+    const realWrite = store.write;
+    let pagesApplied = 0;
+    store.write = async (fn) => {
+      const out = await realWrite(fn);
+      return out;
+    };
+    // fail every write after the third page's apply: the run dies before it finishes
+    const client = fakeClient(three());
+    const orig = client.page;
+    client.page = async (a) => { const p = await orig(a); pagesApplied++; return p; };
+    let writes = 0;
+    store.write = (fn) => {
+      writes++;
+      if (pagesApplied === 3 && writes > 1 && fn.toString().includes('checkpoint')) return Promise.reject(Object.assign(new Error('killed'), {code: 'KILLED'}));
+      return realWrite(fn);
+    };
+    await runSync(store, client, log, {now});
+    store.write = realWrite;
+    const again = fakeClient(three());
+    const r = await runSync(store, again, log, {now});
+    assert.strictEqual(r.state, 'idle');
+    assert.strictEqual(again.calls.length, 0, `refetched ${again.calls.length} pages after the last one was applied`);
+    const [st] = await store.read('SELECT first_sync_done FROM mirror_state');
+    assert.strictEqual(st.first_sync_done, 1);
+  });
+
+  it('an aborted run keeps its place and says syncing', async () => {
+    const ac = new AbortController();
+    const client = fakeClient(three());
+    const orig = client.page;
+    client.page = async (a) => { const p = await orig(a); ac.abort(); return p; };
+    const r = await runSync(store, client, log, {now, signal: ac.signal});
+    assert.strictEqual(r.state, 'syncing');
+    const r2 = await runSync(store, fakeClient(three()), log, {now});
+    assert.strictEqual(r2.state, 'idle');
+    assert.deepStrictEqual(await names(), ['a/x@1', 'b/x@1', 'c/x@1', 'd/x@1']);
   });
 });

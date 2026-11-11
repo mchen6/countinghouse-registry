@@ -6,11 +6,12 @@ const UA = 'countinghouse-registry/0.1.0 (+https://github.com/mchen6/countinghou
 const PAGE = {servers: [], metadata: {count: 0}};
 
 function response(status, body, headers = {}) {
-  return {
-    status, ok: status >= 200 && status < 300,
+  const r = {
+    status, ok: status >= 200 && status < 300, drained: false,
     headers: {get: (k) => headers[k.toLowerCase()] ?? null},
-    text: async () => (typeof body === 'string' ? body : JSON.stringify(body))
+    text: async () => { r.drained = true; return typeof body === 'string' ? body : JSON.stringify(body); }
   };
+  return r;
 }
 
 function fake(script) {
@@ -100,5 +101,43 @@ describe('mirror client', () => {
     assert.strictEqual(await client(f).c.version(), '1.8.9');
     f = fake([response(500, '')]);
     assert.strictEqual(await client(f).c.version(), null);
+  });
+
+  it('names an unexpected 2xx or 3xx bad-page, not http-4xx', async () => {
+    for (const status of [204, 304]) {
+      const f = fake([response(status, '')]);
+      await assert.rejects(client(f).c.page({}), (err) => err.code === 'bad-page' && err.status === status, String(status));
+    }
+  });
+
+  it('drains the body of a failed attempt', async () => {
+    const failed = response(503, 'busy');
+    const f = fake([failed, response(200, PAGE)]);
+    await client(f).c.page({});
+    assert.strictEqual(failed.drained, true);
+  });
+
+  it('passes a timeout signal to every fetch', async () => {
+    const f = fake([response(200, PAGE)]);
+    await client(f).c.page({});
+    assert.ok(f.calls[0].init.signal instanceof AbortSignal);
+  });
+
+  it('stops waiting at once when its signal aborts', async () => {
+    const f = fake([response(503, ''), response(200, PAGE)]);
+    const ac = new AbortController();
+    const c = createUpstreamClient({baseUrl: 'https://registry.example', fetch: f.fetch, userAgent: UA, random: () => 1, maxDelayMs: 3600000});
+    const started = Date.now();
+    setTimeout(() => ac.abort(), 50);
+    await assert.rejects(c.page({signal: ac.signal}), (err) => err.code === 'aborted');
+    assert.ok(Date.now() - started < 2000, 'kept sleeping after abort');
+  });
+
+  it('asks for the upstream version once, without retries', async () => {
+    const f = fake([response(503, ''), response(200, {version: '1'})]);
+    const {c, sleeps} = client(f);
+    assert.strictEqual(await c.version(), null);
+    assert.strictEqual(f.calls.length, 1);
+    assert.deepStrictEqual(sleeps, []);
   });
 });

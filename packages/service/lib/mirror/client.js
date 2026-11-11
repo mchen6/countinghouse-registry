@@ -8,6 +8,27 @@
 
 const OFFICIAL = 'io.modelcontextprotocol.registry/official';
 const BASE_DELAY_MS = 5000;
+const FETCH_TIMEOUT_MS = 30000;
+const VERSION_TIMEOUT_MS = 10000;
+
+// A sleep that ends early, rejecting, when the signal aborts.
+function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(new UpstreamError('aborted'));
+    const t = setTimeout(() => { if (signal) signal.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const onAbort = () => { clearTimeout(t); reject(new UpstreamError('aborted')); };
+    if (signal) signal.addEventListener('abort', onAbort, {once: true});
+  });
+}
+
+async function drain(res) {
+  try {
+    if (res.body && typeof res.body.cancel === 'function') await res.body.cancel();
+    else if (typeof res.text === 'function') await res.text();
+  } catch {
+    // nothing to do: the body is unwanted either way
+  }
+}
 
 class UpstreamError extends Error {
   constructor(code, status = null) {
@@ -32,51 +53,74 @@ function validPage(body) {
     r._meta && r._meta[OFFICIAL] && typeof r._meta[OFFICIAL] === 'object');
 }
 
-function createUpstreamClient({baseUrl, fetch = globalThis.fetch, userAgent, sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
-  random = Math.random, maxDelayMs}) {
+function createUpstreamClient({baseUrl, fetch = globalThis.fetch, userAgent, sleep = abortableSleep, random = Math.random, maxDelayMs}) {
   const headers = {'User-Agent': userAgent, 'Accept': 'application/json', 'Accept-Encoding': 'gzip'};
 
-  async function getJson(url) {
+  // One fetch, bounded by a timeout and by the caller's signal.
+  async function fetchOnce(url, signal, timeoutMs) {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    try {
+      return await fetch(url, {headers, signal: combined});
+    } catch {
+      if (signal && signal.aborted) throw new UpstreamError('aborted');
+      throw new UpstreamError('network');
+    }
+  }
+
+  async function bodyJson(res) {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new UpstreamError('bad-page', 200);
+    }
+  }
+
+  async function getJson(url, signal) {
     let waited = 0;
     for (let attempt = 0; ; attempt++) {
       let res = null;
-      let err = null;
+      let err;
       try {
-        res = await fetch(url, {headers});
+        res = await fetchOnce(url, signal, FETCH_TIMEOUT_MS);
       } catch (e) {
-        err = new UpstreamError('network');
+        if (e.code === 'aborted') throw e;
+        err = e;
       }
-      if (res && res.status === 200) {
-        const text = await res.text();
-        try {
-          return JSON.parse(text);
-        } catch {
-          throw new UpstreamError('bad-page', 200);
-        }
+      if (res && res.status === 200) return bodyJson(res);
+      if (res) {
+        await drain(res);
+        if (res.status === 429) err = new UpstreamError('http-429', 429);
+        else if (res.status >= 500) err = new UpstreamError('http-5xx', res.status);
+        else if (res.status >= 400) throw new UpstreamError('http-4xx', res.status);
+        else throw new UpstreamError('bad-page', res.status);
       }
-      if (res && res.status !== 429 && res.status < 500) throw new UpstreamError('http-4xx', res.status);
-      if (res) err = new UpstreamError(res.status === 429 ? 'http-429' : 'http-5xx', res.status);
       const delay = (res && retryAfterMs(res)) ?? Math.floor(random() * Math.min(maxDelayMs, BASE_DELAY_MS * 2 ** attempt));
       if (waited + delay > maxDelayMs) throw err;
-      await sleep(delay);
+      await sleep(delay, signal);
       waited += delay;
     }
   }
 
-  async function page({cursor = null, updatedSince = null} = {}) {
+  async function page({cursor = null, updatedSince = null, signal = null} = {}) {
     const u = new URL('/v0.1/servers', baseUrl);
     u.searchParams.set('limit', '100');
     u.searchParams.set('include_deleted', 'true');
     if (cursor) u.searchParams.set('cursor', cursor);
     if (updatedSince) u.searchParams.set('updated_since', updatedSince);
-    const body = await getJson(u.toString());
+    const body = await getJson(u.toString(), signal);
     if (!validPage(body)) throw new UpstreamError('bad-page', 200);
     return {servers: body.servers, nextCursor: body.metadata.nextCursor || null};
   }
 
-  async function version() {
+  // Informational only: one attempt, a short timeout, null on any failure, so it
+  // never holds up a sync.
+  async function version({signal = null} = {}) {
     try {
-      const body = await getJson(new URL('/v0.1/version', baseUrl).toString());
+      const res = await fetchOnce(new URL('/v0.1/version', baseUrl).toString(), signal, VERSION_TIMEOUT_MS);
+      if (res.status !== 200) { await drain(res); return null; }
+      const body = await bodyJson(res);
       return body && typeof body.version === 'string' ? body.version : null;
     } catch {
       return null;

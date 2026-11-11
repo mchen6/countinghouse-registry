@@ -23,18 +23,21 @@ through the same API.
   applied page after a restart, and the service answers with what is loaded
   meanwhile (`GET /v0.1/x/io.github.mchen6/countinghouse-registry/mirror`
   says `syncing`).
-- **Reconciliation**: a full pass once every `upstream.reconcile.everyDays`
-  days (default 7) at the UTC hour `upstream.reconcile.atHour` (default 3).
-  Records the pass does not see are served as deleted (gone upstream). If a
-  pass sees fewer than half the records of the previous one, it hides nothing
-  and the mirror state turns `failed` with `upstream-shrank`: check the
-  official registry before the next pass.
+- **Reconciliation**: a full pass every `upstream.reconcile.everyDays` days
+  (default 7): the first run that starts at or after the UTC hour
+  `upstream.reconcile.atHour` (default 3) on the day `everyDays` after the
+  last pass. Records the pass does not see are served as deleted (gone
+  upstream). If a pass sees fewer than half the records of the previous one,
+  it applies nothing (no updates, no hiding), the mirror state turns `failed`
+  with `upstream-shrank`, and the pass is tried again at the next day's hour:
+  check the official registry meanwhile.
 - **Identity**: requests carry
   `User-Agent: countinghouse-registry/<version> (+https://github.com/mchen6/countinghouse-registry)`.
 - **Failures**: on errors and rate limits the mirror waits (`Retry-After`, or
-  backoff from 5 s, up to the interval) and resumes; `/healthz` and the
+  backoff from 5 s, up to the interval; each request times out after 30 s)
+  and resumes; stopping the service ends any wait at once; `/healthz` and the
   mirror endpoint show `lastError` (`network`, `http-4xx`, `http-5xx`,
-  `http-429`, `bad-page`, `upstream-shrank`). A failed mirror does not make
+  `http-429`, `bad-page`, `upstream-shrank`, `store`). A failed mirror does not make
   `/healthz` unhealthy: the API keeps serving what it has.
 
 ## Backups (spec section 13.3)
