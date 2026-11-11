@@ -9,7 +9,7 @@ const {claimOf} = require('./namespaces');
 const {recomputeLatest} = require('./latest');
 const {rebuildNames} = require('../mirror/sources');
 const {ROW_COLUMNS} = require('../read/response');
-const {conflictLogger} = require('./conflicts');
+const {conflictLogger, touchEnables} = require('./conflicts');
 
 const MAX_DEPTH = 64;
 const MAX_TOOLS = 500;
@@ -121,6 +121,7 @@ async function setStatus(store, name, version, body, {now = new Date()} = {}) {
       o.statusChangedAt = nowIso;
       o.updatedAt = nowIso;
       await tx.run('UPDATE records SET official = ?, changed_at = ? WHERE name = ? AND version = ?', [JSON.stringify(o), nowIso, name, r.version]);
+      await touchEnables(tx, name, r.version);
     }
     await recomputeLatest(tx, name, nowIso);
     const versions = changing.map((r) => r.version);

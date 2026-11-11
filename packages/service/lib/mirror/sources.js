@@ -18,7 +18,7 @@
 // origin) changes.
 const {latestOf, recomputeLatest} = require('../publish/latest');
 const {claimOf, storedClaims} = require('../publish/namespaces');
-const {compareWithLocal} = require('../publish/conflicts');
+const {compareWithLocal, touchEnables} = require('../publish/conflicts');
 
 const ORDER_KEY = 'upstream_order';
 const REBUILD_BATCH = 500;
@@ -44,6 +44,7 @@ async function rebuildName(tx, name, nowIso, {claims, onConflict}) {
       } else if (row.origin === 'local+upstream') {
         // No upstream has it any more: no longer confirmed by upstream.
         await tx.run("UPDATE records SET origin = 'local', mirrored_at = NULL, changed_at = ? WHERE name = ? AND version = ? AND source = 'local'", [nowIso, name, version]);
+        await touchEnables(tx, name, version);
       }
       continue;
     }
@@ -85,6 +86,11 @@ async function rebuildName(tx, name, nowIso, {claims, onConflict}) {
     await tx.run(`UPDATE records SET server = ?, official = ?, upstream = ?, mirrored_at = ?, upstream_updated_at = ?, hidden_reason = ?,
                   changed_at = CASE WHEN ? THEN ? ELSE changed_at END WHERE name = ? AND version = ?`,
     [t.server, t.official, t.upstream, t.mirrored_at, t.upstream_updated_at, t.hidden_reason, servedChange ? 1 : 0, nowIso, name, t.version]);
+    // A change to what an instance is shown (the remotes, the status, the hidden
+    // mark) moves its entries' sequence (9.4).
+    if (r.server !== t.server || (r.hidden_reason || null) !== t.hidden_reason || JSON.parse(r.official).status !== t.meta.status) {
+      await touchEnables(tx, name, t.version);
+    }
   }
   if (claimed) await recomputeLatest(tx, name, nowIso);
 }

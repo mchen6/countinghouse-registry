@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mchen6/countinghouse-registry/results.schema.json",
+  "title": "A gateway instance's result for an enabled entry (spec section 9.4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "outcome"],
+  "properties": {
+    "name": {"type": "string", "minLength": 3, "maxLength": 200},
+    "version": {"type": "string", "minLength": 1, "maxLength": 255},
+    "outcome": {"enum": ["validated", "changed", "failed"]},
+    "reason": {"enum": ["unreachable", "auth-rejected", "protocol-error", "invalid-tools-list", "timeout", "other"]},
+    "previousSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tools": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": ["name", "inputSchema"],
+        "properties": {
+          "name": {"type": "string"},
+          "inputSchema": {"type": "object"}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "validated"}}}, "then": {"required": ["tools"], "not": {"anyOf": [{"required": ["reason"]}, {"required": ["previousSha256"]}]}}},
+    {"if": {"properties": {"outcome": {"const": "changed"}}}, "then": {"required": ["tools", "previousSha256"], "not": {"required": ["reason"]}}},
+    {"if": {"properties": {"outcome": {"const": "failed"}}}, "then": {"required": ["reason"], "not": {"anyOf": [{"required": ["tools"]}, {"required": ["previousSha256"]}]}}}
+  ]
+}

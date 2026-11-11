@@ -207,6 +207,35 @@ operator's view to the public.
 Each action writes an audit row (time, key fingerprint, action, subject)
 and a log line `operator.action`. Neither ever holds a token.
 
+## Enabling entries on your gateways (spec section 9)
+
+List each gateway instance under `instances` with its public key. The
+gateway exchanges a signed timestamp for an instance token and polls its
+enabled list (docs/api.md has the contract).
+
+- **Enable**: `PUT …/instances/{instance}/enabled/{name}/versions/{version}`,
+  optionally `{"remote": <index>}`. Only `streamable-http` remotes are
+  enabled. The gateway validates the server's `tools/list` and reports
+  back.
+- **Retry or approve**: a failed entry, or one whose tool list changed
+  (`tools-changed`, and the gateway has stopped serving it), is fixed by
+  PUTting the enable again. The gateway validates afresh.
+- **Disable**: `DELETE` of the same path. The registry never stops an
+  instance on its own. When upstream deletes a version or it goes away
+  upstream, your instances get a notice and keep serving it until you
+  disable it, or until you accept it with `keepDeleted`.
+- **What you see**: `GET …/instances/{instance}/enabled` lists each entry
+  with its current result and history. Operator reads of a record show
+  `hosting.byInstance`.
+- **What the public sees**: only `hosting: {hosted, instances}`, or nothing
+  with `publicHosting: "none"`. Instance ids never appear.
+
+Enables and disables are written to the audit table by key fingerprint.
+**Removing an instance** from `instances` disables its entries at the next
+start: they leave the public hosting count, and the instance's results are
+refused (404) even while its last token is still valid. The service logs
+`enable.instances.removed` and audits each entry as disabled by `config`.
+
 ## Health (spec section 13.4)
 
 `GET /healthz` is **internal**: point your orchestrator's or proxy's health

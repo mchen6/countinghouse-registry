@@ -42,6 +42,12 @@ key `io.modelcontextprotocol.registry/official` is on every record; its name
 is historical and says nothing about where a record came from. Public
 responses never say which upstream registry a mirrored record came from.
 
+`hosting` is `{hosted: true, instances: N}` while N ≥ 1 gateway instances
+serve the version (they validated it). An absent `hosting` means either
+that no instance serves it or that the operator hides hosting
+(`publicHosting: "none"`); it is never a third state. Hosting changes do not
+move `changedAt`. Instance ids never appear in public responses.
+
 ## Extension endpoints
 
 Under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and `/v0/x/…`):
@@ -134,3 +140,86 @@ unmodified `mcp-publisher` works.
   identical upstream copy makes it `local+upstream`; a different one is a
   conflict, shown to the operator. In a claimed namespace, `isLatest` is
   computed by this registry over the local and mirrored versions together.
+
+## Enable through countinghouse: the gateway contract (spec section 9, R1)
+
+These routes are under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and
+`/v0/x/…`). They send no CORS headers and take JSON bodies of at most 1 MiB.
+
+### Operator (a token with `operate`)
+
+- `PUT instances/{instance}/enabled/{name}/versions/{version}`, body
+  `{remote?: <index into server.remotes>}`: enables the entry on that
+  instance.
+  - The remote must be `streamable-http`. The default is the first one; a
+    version with none is 422.
+  - Refused (409) for a version with an unacknowledged conflict, and for one
+    deleted or gone upstream unless the `keepDeleted` override is set.
+  - The state becomes `requested`. A re-PUT records who and when, moves the
+    entry's sequence and asks the gateway to validate afresh: it is how to
+    retry after `failed` and how to approve a `changed` tool list.
+  - An instance id not in the config is 404.
+- `DELETE` of the same path: the state becomes `disabled`. The entry is kept,
+  so the instance sees it on its next poll and stops serving it.
+- `GET instances/{instance}/enabled`: the instance's list, with each entry's
+  current `result` and its `history`.
+
+### Instance (that instance's token, from `POST …/auth/instance`)
+
+- `GET instances/{instance}/enabled?since=<nextSince>&limit=<1..100>` →
+  `{items, nextSince}`.
+  - Items are the entries whose enable, result, record status or notices
+    changed after `since`, in change-sequence order. Each is
+    `{name, version, state, remote, status, notices, sha256?, updatedAt}`.
+  - `state` is `requested`, `validated`, `changed`, `failed` or `disabled`.
+  - `remote` is the chosen object from `server.json` as listed. The values
+    come from the instance's own config.
+  - `notices` are any of `upstream-deprecated`, `upstream-deleted`,
+    `gone-upstream`, `conflict` and `tools-changed`. A local publisher's own
+    status change carries no upstream notice.
+  - `nextSince` is the sequence of the last item returned, or `since` when
+    there are none. It is opaque: send it back as `since` (omit it on the
+    first poll).
+  - A full page means "poll again now". The sequence is the cursor, and no
+    change is missed or seen twice, because the sequence is taken inside
+    each write and SQLite commits in that order. The default poll interval
+    is 5 seconds.
+- `POST instances/{instance}/results`, body
+  `{name, version, outcome, reason?, tools?, previousSha256?}`. The envelope
+  is closed: any other field (tenant, key, caller, usage, address) is 422.
+  - `validated`: requires `tools`. Accepted for an entry in state
+    `requested`.
+  - `changed`: requires `tools` and `previousSha256`. Accepted in
+    `validated` with the validated hash as `previousSha256`; the gateway
+    has **stopped serving** the entry. Also accepted in `changed` with the
+    current changed hash, which records a newer list so the operator
+    approves the latest. The entry leaves `hosting` and gets the
+    `tools-changed` notice.
+  - `failed`: requires `reason`, one of `unreachable`, `auth-rejected`,
+    `protocol-error`, `invalid-tools-list`, `timeout` or `other`, and no
+    `tools`. Accepted in `requested`, `validated` or `changed`. A validated
+    entry that fails leaves `hosting`.
+  - Each `tools` item needs `name` (a string) and `inputSchema` (an object)
+    and is otherwise open.
+  - The answer is 200 `{sha256}` (`{}` for `failed`). A repeat equal to the
+    current result is 200 and changes nothing.
+  - A disabled entry, or one not enabled for the instance, is 409. More
+    than 500 `tools` is 413.
+  - Every accepted result is kept as history.
+
+**The result hash (the contract the gateway is held to).** The registry
+hashes the object `{tools}`, whose `tools` is the `tools` array of the
+`tools/list` result exactly as the listed server served it. The hash is
+`sha256Canonical` from `countinghouse-registry-cli/lib/canonical-json`
+(countinghouse's canonical JSON serialisation), as 64 lower-case hex
+digits. The gateway computes the same hash of the same input, compares it
+with the returned `sha256`, and posts that value as `previousSha256` when it
+reports `changed`.
+
+**The gateway's side (R1).**
+- It re-takes `tools/list` for every served entry on a schedule (hourly by
+  default) and on every reconnect, compares it with the validated hash, and
+  on a difference stops serving and posts `changed`.
+- It retries failed connections with its own backoff and posts `failed`
+  only after its retry budget. The registry never schedules retries.
+- It retries result posts until they are accepted; they are idempotent.

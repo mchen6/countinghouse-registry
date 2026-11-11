@@ -11,6 +11,7 @@ const {mirrorState, mirrorSummary} = require('./mirror/sync');
 const {writeRouter, recordReadRouter} = require('./publish/routes');
 const {denyAll, allows} = require('./auth/permissions');
 const {operatorRouter, operatorDetail} = require('./operator/routes');
+const {enableRouter} = require('./enable/routes');
 
 const X = '/x/io.github.mchen6/countinghouse-registry';
 
@@ -85,9 +86,10 @@ function createApp({store, config, log, auth = denyAll, mirror = null, versionIn
   // The write routes first: they send no CORS headers (spec 4.1).
   const write = writeRouter({store, config, log, auth, now, view});
   const operator = operatorRouter({store, config, log, auth, now, mirror});
+  const enable = enableRouter({store, config, log, auth, now});
   for (const prefix of ['/v0.1', '/v0']) {
     if (auth.router) app.use(prefix, auth.router);
-    app.use(`${prefix}${X}`, operator);
+    app.use(`${prefix}${X}`, operator, enable);
     app.use(prefix, write, read);
   }
 

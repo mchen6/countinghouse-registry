@@ -15,6 +15,7 @@ const express = require('express');
 const {sendJson, problem, handle} = require('../http/problem');
 const {mirrorState} = require('../mirror/sync');
 const {serverHash, touchEnables} = require('../publish/conflicts');
+const {hostingDetail} = require('../enable/enable');
 
 // A recorded 7.2 conflict not yet acknowledged: it blocks new enables (Task 8).
 async function openConflict(tx, name, version) {
@@ -36,12 +37,12 @@ const conflictView = (r) => ({name: r.name, version: r.version, localSha256: r.l
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const invalid = (res, errors) => problem(res, 422, 'validation failed', {errors});
 
-// For an operator read of a served row: {conflict, upstream, alsoAt, differsAt}.
+// For an operator read of a served row: {hosting, conflict, upstream, alsoAt, differsAt}.
 // For a mirrored row, alsoAt and differsAt are the lower-precedence upstreams
 // whose copy is identical (the 7.2 comparison) or differs from the one served;
 // for a local row, every upstream with a visible copy, and no `upstream`.
 async function operatorDetail(store, row) {
-  const detail = {};
+  const detail = {hosting: await hostingDetail(store, row.name, row.version)};
   const [c] = await store.read('SELECT 1 AS x FROM conflicts WHERE name = ? AND version = ?', [row.name, row.version]);
   if (c) detail.conflict = true;
   if (row.source === 'local') {

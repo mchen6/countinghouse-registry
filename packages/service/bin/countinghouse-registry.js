@@ -14,6 +14,7 @@ const {createMirror} = require('../lib/mirror/scheduler');
 const {applyUpstreams} = require('../lib/mirror/sources');
 const {conflictLogger} = require('../lib/publish/conflicts');
 const {applyClaims, ClaimError} = require('../lib/publish/namespaces');
+const {applyInstances} = require('../lib/enable/enable');
 const pkg = require('../package.json');
 
 async function main() {
@@ -54,6 +55,8 @@ async function main() {
     await store.close();
     process.exit(2);
   }
+  const removed = await applyInstances(store, config.instances.map((i) => i.instance), new Date().toISOString());
+  if (removed.length) log.warn('enable.instances.removed', 'disabled the entries of instances no longer configured', {gateways: removed});
   const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString(), {onConflict: conflictLogger(log)});
   if (rebuilt) log.info('mirror.upstreams', 'applied the upstream list', {upstreams: config.upstreams.length});
   const userAgent = `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`;

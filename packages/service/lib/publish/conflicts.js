@@ -28,7 +28,12 @@ const conflictLogger = (log) => ({name, version, localSha, upstreamSha}) =>
 // A change instances must see (a conflict closed or acknowledged, an override
 // set or removed): the name@version's enables take a change sequence value, so
 // their next poll returns them (9.4).
+// One value lands on at most one row per instance (the key is instance, name,
+// version), which keeps a poll page that ends at a value from splitting it;
+// touching several versions at once must take one value per version. No value
+// is taken when nobody has the entry enabled (a gap in the counter is harmless).
 async function touchEnables(tx, name, version) {
+  if (!(await tx.get('SELECT 1 AS x FROM enables WHERE name = ? AND version = ? LIMIT 1', [name, version]))) return;
   const seq = await tx.nextSeq();
   await tx.run('UPDATE enables SET seq = ? WHERE name = ? AND version = ?', [seq, name, version]);
 }
@@ -74,6 +79,7 @@ async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) 
     meta.statusChangedAt = up.statusChangedAt;
   }
   const official = JSON.stringify(meta);
+  if (meta.status !== JSON.parse(local.official).status) await touchEnables(tx, copy.name, copy.version);
   if (local.origin !== 'local+upstream' || local.official !== official || local.mirrored_at !== copy.mirrored_at) {
     await tx.run(`UPDATE records SET origin = 'local+upstream', official = ?, mirrored_at = ?,
       changed_at = CASE WHEN ? THEN ? ELSE changed_at END WHERE name = ? AND version = ? AND source = 'local'`,

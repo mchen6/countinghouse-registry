@@ -175,7 +175,10 @@ and "latest", and clients filter on it (`version=latest`).
 - `hosting`: the public aggregate only: whether any instance serves this
   name@version and how many (instances in state `validated`). An operator
   switch `publicHosting: "aggregate" | "none"` (default `aggregate`) removes
-  it. Per-instance detail is never in public responses (9.6).
+  it. Per-instance detail is never in public responses (9.6). It is present
+  only while at least one instance serves the version: an absent `hosting`
+  means "no validated instance, or hosting hidden by the operator", never a
+  third state.
 - `conflict`: only on operator-authenticated reads (7.2).
 
 Mirror state is per upstream and is **not** repeated per record: it is
@@ -562,7 +565,8 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
   record's status or a notice takes the next value of one monotonic counter
   inside its write transaction. SQLite has a single writer, so sequence order
   is commit order, and a read snapshot always sees a prefix of the sequence.
-  Every response carries `nextSince`, the highest sequence in the snapshot;
+  Every response carries `nextSince`, the highest sequence returned (the
+  last item's, or `since` when none: what makes a full page safe);
   the gateway sends it back as `since` on its next poll (omitted on the
   first). Exact: no overlap, no clocks, no race between a write that started
   before a read and committed after it. The value is opaque to the gateway
@@ -582,8 +586,10 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry/`:
   - `changed`: the gateway found a tool list different from the one it
     validated before, **stopped serving** the entry (countinghouse's rule: a
     changed tool list is a changed contract), and posts the new `tools` with
-    `previousSha256`. Accepted in state `validated` (idempotent in
-    `changed`). State becomes `changed`; the entry leaves
+    `previousSha256` (the validated hash). Accepted in state `validated`
+    (idempotent in `changed`; in `changed`, a newer list against the
+    current changed hash is recorded, so the operator approves the
+    latest). State becomes `changed`; the entry leaves
     `hosting.instances`; the operator gets a `tools-changed` notice; a
     re-enable (9.3) sends the gateway to validate afresh. What produces it on
     the gateway's side (R1): the gateway re-takes `tools/list` for every

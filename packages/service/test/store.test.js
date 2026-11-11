@@ -24,10 +24,10 @@ describe('store', () => {
   });
 
   it('migrates a new file to the latest schema version and is idempotent on reopen', async () => {
-    assert.strictEqual(await store.schemaVersion(), 3);
+    assert.strictEqual(await store.schemaVersion(), 4);
     await store.close();
     store = await openStore(path.join(dir, 'r.db'));
-    assert.strictEqual(await store.schemaVersion(), 3);
+    assert.strictEqual(await store.schemaVersion(), 4);
   });
 
   it('uses WAL mode', async () => {
@@ -115,7 +115,7 @@ describe('store', () => {
     await store.write((tx) => tx.run("UPDATE meta_kv SET v = '99' WHERE k = 'schema_version'"));
     await store.close();
     store = null;
-    await assert.rejects(openStore(path.join(dir, 'r.db')), /schema version 99 is newer than this release \(3\)/);
+    await assert.rejects(openStore(path.join(dir, 'r.db')), /schema version 99 is newer than this release \(4\)/);
   });
 
   it('two stores opening a new file at once migrate it once', async () => {
@@ -124,8 +124,8 @@ describe('store', () => {
     for (let i = 0; i < 40; i++) {
       const f = path.join(dir, `race-${i}.db`);
       const [a, b] = await Promise.all([openStore(f), openStore(f)]);
-      assert.strictEqual(await a.schemaVersion(), 3);
-      assert.strictEqual(await b.schemaVersion(), 3);
+      assert.strictEqual(await a.schemaVersion(), 4);
+      assert.strictEqual(await b.schemaVersion(), 4);
       await a.close();
       await b.close();
     }
