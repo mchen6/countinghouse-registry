@@ -209,7 +209,7 @@ describe('read API', () => {
     t.store.read = () => Promise.reject(new Error('disk gone'));
     try {
       let res = await request(t.url).get('/healthz').expect(503);
-      assert.deepStrictEqual(res.body, {ok: false, store: 'error', mirror: null});
+      assert.deepStrictEqual(res.body, {ok: false, store: 'error', mirror: null, upstreams: null});
       res = await request(t.url).get('/v0.1/health').expect(503);
       assert.deepStrictEqual(res.body, {status: 'error'});
     } finally {

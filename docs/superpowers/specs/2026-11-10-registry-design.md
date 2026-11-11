@@ -179,8 +179,9 @@ and "latest", and clients filter on it (`version=latest`).
 - `conflict`: only on operator-authenticated reads (7.2).
 
 Mirror state is per upstream and is **not** repeated per record: it is
-served at `GET /v0.1/x/io.github.mchen6/countinghouse-registry/mirror`
-(public) and in `/healthz` (6.5).
+served, as a public aggregate, at
+`GET /v0.1/x/io.github.mchen6/countinghouse-registry/mirror` and, per
+upstream, in `/healthz` (6.5).
 
 ## 6. Mirroring
 
@@ -230,15 +231,22 @@ status code and the page number, nothing from the response body.
 
 ### 6.5 Mirror state
 
-`{upstreams: [{name, state: "syncing" | "idle" | "failed", lastSuccessAt, lag,
-lastError, upstreamVersion}]}`, one entry per configured upstream in
+Per upstream: `{name, state: "syncing" | "idle" | "failed", lastSuccessAt,
+lag, lastError, upstreamVersion}`, one entry per configured upstream in
 precedence order: `lag` = seconds since the start of the last successful
 run; `lastError` = a short code (`network`, `http-5xx`, `http-429`,
 `bad-page`, `upstream-shrank`, `store`); `upstreamVersion` from upstream's
-`/v0.1/version` when it answers (read once per run). Served publicly at the
-mirror extension endpoint and in `/healthz`. The upstream's name is public
-there (the operator docs say so, so the operator picks a label they are
-content to show); its URL never is **(implementer's call)**.
+`/v0.1/version` when it answers (read once per run).
+
+An upstream's name is the operator's topology and appears on no public
+response, its URL on no response at all (the reviewer's ruling). The public
+mirror extension endpoint serves the aggregate
+`{state, lastSuccessAt, lag, upstreams: <count>}`: `state` the worst across
+upstreams (`failed` > `syncing` > `idle`), `lastSuccessAt` the oldest, `lag`
+the largest (both `null` while any upstream has never succeeded), so a
+reader knows the catalogue may be partial without learning what it is
+assembled from. The per-upstream list lives in `/healthz` (internal, 13.4)
+and on operator-authenticated reads.
 
 ### 6.6 Reconciliation
 
@@ -302,8 +310,9 @@ registry of local records only **(implementer's call)**.
   served mirrored record. An upstream removed from the list loses its copies
   and state; records only it had become `gone-upstream` (still served as
   deleted where deleted records are asked for, so downstream syncs learn
-  it), never removed. An upstream whose `url` changed starts again with a
-  first sync **(implementer's call)**; renaming one is a removal plus an
+  it), never removed. An upstream whose `url` changed (a trailing slash
+  aside) is a different registry under the same label: its copies and state
+  are dropped and it starts again with a first sync **(implementer's call)**; renaming one is a removal plus an
   addition, so a full sync under the new name (the operator docs say so).
 
 ## 7. Local publishing
@@ -821,8 +830,10 @@ re-publishing local records and re-enabling.
 
 ### 13.4 Health
 
-`GET /healthz`: 200 `{ok: true, store: "ok", mirror: <6.5>}` when the store
-answers; 503 with `store: "error"` when it does not (`/v0.1/health` answers
+`GET /healthz` (internal: for the orchestrator's or proxy's health check,
+never exposed publicly; the operator docs say so): 200
+`{ok: true, store: "ok", mirror: <6.5 aggregate>, upstreams: [<6.5 per upstream>]}`
+when the store answers; 503 with `store: "error"` when it does not (`/v0.1/health` answers
 503 `{status: "error"}` in the same case).
 A failed mirror alone does not make it 503 (the API still serves).
 
@@ -922,10 +933,10 @@ The implementer's calls in this spec (each changeable at review):
     startup on removal with local records (13.3).
 13. Copies from countinghouse at a pinned commit; countinghouse never a
     service dependency (14).
-14. Several upstreams (6.5, 6.8): an upstream's name is public in the
-    mirror state, its URL never; an empty upstream list means no mirroring;
+14. Several upstreams (6.8): an empty upstream list means no mirroring;
     a deleted copy at a higher-precedence upstream is served as deleted; a
-    changed `url` restarts that upstream with a first sync.
+    changed `url` drops that upstream's copies and restarts it with a first
+    sync.
 
 ## 18. Later (not version 1)
 

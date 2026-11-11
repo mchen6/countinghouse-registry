@@ -5,7 +5,9 @@ const os = require('os');
 const path = require('path');
 const {openStore} = require('../lib/store');
 const {createLogger} = require('../lib/log');
-const {runSync, mirrorState} = require('../lib/mirror/sync');
+const {runSync, mirrorState: allStates} = require('../lib/mirror/sync');
+// The default upstream's entry of the mirror state.
+const mirrorState = async (store, at) => (await allStates(store, at)).upstreams[0];
 const {UpstreamError} = require('../lib/mirror/client');
 
 const OFFICIAL = 'io.modelcontextprotocol.registry/official';
@@ -92,13 +94,13 @@ describe('mirror sync', () => {
     const pages = three();
     const client = fakeClient(pages, {failOn: 'c2'});
     await runSync(store, client, log, {now});
-    let [st] = await store.read('SELECT checkpoint, first_sync_done FROM mirror_state');
+    let [st] = await store.read('SELECT checkpoint, first_sync_done FROM mirror_upstreams');
     assert.strictEqual(st.checkpoint, null);
     assert.strictEqual(st.first_sync_done, 0);
     const started = clock;
     clock += 3600000;
     await runSync(store, fakeClient(pages), log, {now});
-    [st] = await store.read('SELECT checkpoint, first_sync_done FROM mirror_state');
+    [st] = await store.read('SELECT checkpoint, first_sync_done FROM mirror_upstreams');
     assert.strictEqual(st.checkpoint, new Date(started).toISOString(), 'checkpoint is not the start of the first sync');
     assert.strictEqual(st.first_sync_done, 1);
   });
@@ -110,7 +112,7 @@ describe('mirror sync', () => {
     await runSync(store, client, log, {now});
     const since = new Date(Date.parse('2026-11-10T10:00:00.000Z') - 300000).toISOString();
     assert.deepStrictEqual(client.calls.map((c) => c.updatedSince), [since, since]);
-    const [st] = await store.read('SELECT checkpoint FROM mirror_state');
+    const [st] = await store.read('SELECT checkpoint FROM mirror_upstreams');
     assert.strictEqual(st.checkpoint, '2026-11-10T11:00:00.000Z');
   });
 
@@ -206,7 +208,7 @@ describe('mirror sync', () => {
     clock += 3600000;
     const r = await runSync(store, fakeClient({}, {failOn: ''}), log, {now});
     assert.strictEqual(r.state, 'failed');
-    const [st] = await store.read('SELECT checkpoint FROM mirror_state');
+    const [st] = await store.read('SELECT checkpoint FROM mirror_upstreams');
     assert.strictEqual(st.checkpoint, '2026-11-10T10:00:00.000Z');
     const m = await mirrorState(store, now());
     assert.strictEqual(m.state, 'failed');
@@ -218,7 +220,7 @@ describe('mirror sync', () => {
     await runSync(store, fakeClient(three(), {version: '1.8.9'}), log, {now});
     clock += 120000;
     const m = await mirrorState(store, now());
-    assert.deepStrictEqual(m, {state: 'idle', lastSuccessAt: '2026-11-10T10:00:00.000Z', lag: 120, lastError: null, upstreamVersion: '1.8.9'});
+    assert.deepStrictEqual(m, {name: 'official', state: 'idle', lastSuccessAt: '2026-11-10T10:00:00.000Z', lag: 120, lastError: null, upstreamVersion: '1.8.9'});
   });
 
   it('stops between pages when asked, keeping its place', async () => {
@@ -310,7 +312,7 @@ describe('mirror sync', () => {
     const r = await runSync(store, again, log, {now});
     assert.strictEqual(r.state, 'idle');
     assert.strictEqual(again.calls.length, 0, `refetched ${again.calls.length} pages after the last one was applied`);
-    const [st] = await store.read('SELECT first_sync_done FROM mirror_state');
+    const [st] = await store.read('SELECT first_sync_done FROM mirror_upstreams');
     assert.strictEqual(st.first_sync_done, 1);
   });
 
@@ -324,7 +326,7 @@ describe('mirror sync', () => {
     const realWrite = store.write;
     let applyBatches = 0;
     store.write = (fn) => {
-      if (fn.toString().includes('DELETE FROM reconcile_stage WHERE pass_no = ? AND name') && ++applyBatches === 3) {
+      if (fn.toString().includes('AND pass_no = ? AND name = ? AND version') && ++applyBatches === 3) {
         return Promise.reject(Object.assign(new Error('killed'), {code: 'KILLED'}));
       }
       return realWrite(fn);
@@ -345,13 +347,13 @@ describe('mirror sync', () => {
     assert.deepStrictEqual(hidden.map((x) => x.name), ['n10/x']);
     const [{rest}] = await store.read('SELECT count(*) AS rest FROM reconcile_stage');
     assert.strictEqual(rest, 0);
-    const kv = await store.read("SELECT k FROM meta_kv WHERE k = 'mirror_reconcile_guard'");
-    assert.deepStrictEqual(kv, []);
+    const [{guard}] = await store.read('SELECT reconcile_guard AS guard FROM mirror_upstreams');
+    assert.strictEqual(guard, null);
   });
 
   it('a new reconcile pass drops stage rows abandoned by an earlier pass', async () => {
     await runSync(store, fakeClient(three()), log, {now});
-    await store.write((tx) => tx.run("INSERT INTO reconcile_stage (pass_no, name, version, server, official) VALUES (99, 'old/x', '1', '{}', '{}')"));
+    await store.write((tx) => tx.run("INSERT INTO reconcile_stage (upstream, pass_no, name, version, server, official) VALUES ('official', 99, 'old/x', '1', '{}', '{}')"));
     clock += 3600000;
     const r = await runSync(store, fakeClient(three()), log, {now, mode: 'reconcile'});
     assert.strictEqual(r.state, 'idle');
@@ -361,7 +363,7 @@ describe('mirror sync', () => {
 
   it('a new reconcile pass does not inherit a guard decision left by an earlier pass', async () => {
     await runSync(store, fakeClient(three()), log, {now});
-    await store.write((tx) => tx.run("INSERT INTO meta_kv (k, v) VALUES ('mirror_reconcile_guard', 'passed:4')"));
+    await store.write((tx) => tx.run("UPDATE mirror_upstreams SET reconcile_guard = 'passed:4'"));
     clock += 3600000;
     const r = await runSync(store, fakeClient({'': {servers: [rec('a/x', '1')], nextCursor: null}}), log, {now, mode: 'reconcile'});
     assert.strictEqual(r.state, 'failed');

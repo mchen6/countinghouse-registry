@@ -5,9 +5,10 @@ const os = require('os');
 const path = require('path');
 const {openStore} = require('../lib/store');
 const {createLogger} = require('../lib/log');
-const {createScheduler} = require('../lib/mirror/scheduler');
+const {createScheduler, createMirror} = require('../lib/mirror/scheduler');
+const {applyUpstreams} = require('../lib/mirror/sources');
 
-const CONFIG = {upstream: {url: 'https://registry.example', intervalMinutes: 60, reconcile: {everyDays: 7, atHour: 3}}};
+const UPSTREAM = {name: 'official', url: 'https://registry.example', intervalMinutes: 60, reconcile: {everyDays: 7, atHour: 3}};
 
 describe('mirror scheduler', () => {
   let dir;
@@ -35,7 +36,7 @@ describe('mirror scheduler', () => {
   });
   afterEach(async () => { await store.close(); fs.rmSync(dir, {recursive: true, force: true}); });
 
-  const make = () => createScheduler({store, log, config: CONFIG, now, setTimer, clearTimer, run});
+  const make = () => createScheduler({store, log, upstream: UPSTREAM, now, setTimer, clearTimer, run});
   const tick = () => new Promise((r) => setTimeout(r, 5));
   // Waits until cond() holds (the scheduler's store read runs on sqlite's thread pool).
   const until = async (cond) => { for (let i = 0; i < 400 && !cond(); i++) await tick(); assert.ok(cond(), 'condition never held'); };
@@ -69,7 +70,7 @@ describe('mirror scheduler', () => {
   });
 
   it('runs reconcile at atHour once everyDays have passed since the last pass', async () => {
-    await store.write((tx) => tx.run("UPDATE mirror_state SET first_sync_done = 1, last_reconcile_at = '2026-11-03T03:10:00.000Z' WHERE id = 1"));
+    await store.write((tx) => tx.run("UPDATE mirror_upstreams SET first_sync_done = 1, last_reconcile_at = '2026-11-03T03:10:00.000Z' WHERE name = 'official'"));
     const s = make();
     clock = Date.parse('2026-11-10T02:30:00.000Z');
     s.runNow();
@@ -83,7 +84,7 @@ describe('mirror scheduler', () => {
     assert.strictEqual(runs[1].mode, 'reconcile');
     release();
     await until(() => timers.length === 1);
-    await store.write((tx) => tx.run("UPDATE mirror_state SET last_reconcile_at = '2026-11-10T03:05:00.000Z' WHERE id = 1"));
+    await store.write((tx) => tx.run("UPDATE mirror_upstreams SET last_reconcile_at = '2026-11-10T03:05:00.000Z' WHERE name = 'official'"));
     clock = Date.parse('2026-11-11T03:05:00.000Z');
     s.runNow();
     await until(() => runs.length === 3);
@@ -109,7 +110,7 @@ describe('mirror scheduler', () => {
 
   it('a run that throws is logged and the next one is still scheduled', async () => {
     const lines = [];
-    const s = createScheduler({store, log: createLogger({stream: {write: (l) => { lines.push(l); return true; }}}), config: CONFIG, now, setTimer, clearTimer,
+    const s = createScheduler({store, log: createLogger({stream: {write: (l) => { lines.push(l); return true; }}}), upstream: UPSTREAM, now, setTimer, clearTimer,
       run: () => Promise.reject(Object.assign(new Error('disk'), {code: 'SQLITE_FULL'}))});
     s.start();
     await until(() => timers.length === 1);
@@ -118,7 +119,7 @@ describe('mirror scheduler', () => {
   });
 
   const modeAt = async (iso, lastReconcile, extra = '') => {
-    await store.write((tx) => tx.run(`UPDATE mirror_state SET first_sync_done = 1, last_reconcile_at = ? WHERE id = 1`, [lastReconcile]));
+    await store.write((tx) => tx.run(`UPDATE mirror_upstreams SET first_sync_done = 1, last_reconcile_at = ? WHERE name = 'official'`, [lastReconcile]));
     if (extra) await store.write((tx) => tx.run(extra));
     clock = Date.parse(iso);
     const s = make();
@@ -144,9 +145,65 @@ describe('mirror scheduler', () => {
   });
 
   it('after an upstream-shrank pass, reconcile is retried the next day, not within the hour', async () => {
-    const shrank = "INSERT INTO meta_kv (k, v) VALUES ('mirror_reconcile_retry_at', '2026-11-11T03:00:00.000Z')";
+    const shrank = "UPDATE mirror_upstreams SET reconcile_retry_at = '2026-11-11T03:00:00.000Z' WHERE name = 'official'";
     assert.strictEqual(await modeAt('2026-11-10T03:30:00.000Z', '2026-11-03T03:10:00.000Z', shrank), 'incremental');
     assert.strictEqual(await modeAt('2026-11-11T03:10:00.000Z', '2026-11-03T03:10:00.000Z'), 'reconcile');
+  });
+
+  it("passes the upstream's name to its runs", async () => {
+    const s = make();
+    s.start();
+    await until(() => runs.length === 1);
+    assert.strictEqual(runs[0].upstream, 'official');
+    release();
+    await s.stop();
+  });
+
+  describe('createMirror', () => {
+    const B = {name: 'own', url: 'https://own.example', intervalMinutes: 10, reconcile: {everyDays: 1, atHour: 0}};
+    let pending;
+    const runEach = (opts) => new Promise((resolve) => { runs.push(opts); pending.push(() => resolve({state: 'idle'})); });
+    beforeEach(async () => {
+      pending = [];
+      await applyUpstreams(store, [UPSTREAM, B], now().toISOString());
+    });
+    const mirror = () => createMirror({store, log, config: {upstreams: [UPSTREAM, B]}, clientFor: (u) => ({name: u.name}),
+      now, setTimer, clearTimer, run: runEach});
+
+    it('runs every upstream at start, each with its own client and interval', async () => {
+      const m = mirror();
+      m.start();
+      await until(() => runs.length === 2);
+      assert.deepStrictEqual(runs.map((r) => [r.upstream, r.client.name]).sort(), [['official', 'official'], ['own', 'own']]);
+      pending.splice(0).forEach((f) => f());
+      await until(() => timers.length === 2);
+      assert.deepStrictEqual(timers.map((t) => t.ms).sort((x, y) => x - y), [10 * 60000, 60 * 60000]);
+      await m.stop();
+    });
+
+    it('runNow(name) starts that upstream only; runNow() starts every idle one', async () => {
+      const m = mirror();
+      assert.deepStrictEqual(m.runNow('own'), {started: true});
+      await until(() => runs.length === 1);
+      assert.strictEqual(runs[0].upstream, 'own');
+      assert.deepStrictEqual(m.runNow('own'), {started: false});
+      assert.deepStrictEqual(m.runNow(), {started: true});
+      await until(() => runs.length === 2);
+      assert.strictEqual(runs[1].upstream, 'official');
+      assert.deepStrictEqual(m.runNow('nope'), {started: false});
+      pending.splice(0).forEach((f) => f());
+      await m.stop();
+    });
+
+    it('stop stops every upstream', async () => {
+      const m = mirror();
+      m.start();
+      await until(() => runs.length === 2);
+      const p = m.stop();
+      assert.ok(runs.every((r) => r.signal.aborted));
+      pending.splice(0).forEach((f) => f());
+      await p;
+    });
   });
 
   it('stop aborts the run it waits for', async () => {

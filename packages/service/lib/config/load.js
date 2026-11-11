@@ -32,7 +32,11 @@ function firstDuplicate(values) {
 }
 
 function crossChecks(c) {
-  let i = firstDuplicate(c.claims);
+  let i = firstDuplicate(c.upstreams.map((x) => x.name));
+  if (i >= 0) throw new ConfigError(`/upstreams/${i}/name`, 'duplicate upstream name');
+  i = firstDuplicate(c.upstreams.map((x) => x.url.replace(/\/+$/, '')));
+  if (i >= 0) throw new ConfigError(`/upstreams/${i}/url`, 'duplicate upstream url');
+  i = firstDuplicate(c.claims);
   if (i >= 0) throw new ConfigError(`/claims/${i}`, 'duplicate claim');
   i = firstDuplicate(c.instances.map((x) => x.instance));
   if (i >= 0) throw new ConfigError(`/instances/${i}/instance`, 'duplicate instance id');
@@ -59,6 +63,9 @@ function loadConfig(path) {
     config = JSON.parse(fs.readFileSync(path, 'utf8'));
   } catch (err) {
     throw new ConfigError('', `cannot read ${path} as JSON (${err.code || err.name})`);
+  }
+  if (config && typeof config === 'object' && 'upstream' in config) {
+    throw new ConfigError('/upstream', 'renamed to "upstreams": a list of {name, url, intervalMinutes, reconcile} (docs/operator.md)');
   }
   if (!validate(config)) {
     const err = validate.errors[0];

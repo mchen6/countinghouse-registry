@@ -32,20 +32,25 @@
         "file": {"type": "string", "minLength": 1}
       }
     },
-    "upstream": {
-      "type": "object",
-      "additionalProperties": false,
-      "default": {},
-      "properties": {
-        "url": {"type": "string", "pattern": "^https?://[^\\s/]+(/[^\\s]*)?$", "default": "https://registry.modelcontextprotocol.io"},
-        "intervalMinutes": {"type": "integer", "minimum": 10, "default": 60},
-        "reconcile": {
-          "type": "object",
-          "additionalProperties": false,
-          "default": {},
-          "properties": {
-            "everyDays": {"type": "integer", "minimum": 1, "default": 7},
-            "atHour": {"type": "integer", "minimum": 0, "maximum": 23, "default": 3}
+    "upstreams": {
+      "type": "array",
+      "default": [{"name": "official", "url": "https://registry.modelcontextprotocol.io"}],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "url"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,30}$"},
+          "url": {"type": "string", "pattern": "^https?://[^\\s/]+(/[^\\s]*)?$"},
+          "intervalMinutes": {"type": "integer", "minimum": 10, "default": 60},
+          "reconcile": {
+            "type": "object",
+            "additionalProperties": false,
+            "default": {},
+            "properties": {
+              "everyDays": {"type": "integer", "minimum": 1, "default": 7},
+              "atHour": {"type": "integer", "minimum": 0, "maximum": 23, "default": 3}
+            }
           }
         }
       }

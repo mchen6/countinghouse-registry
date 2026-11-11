@@ -7,7 +7,8 @@ const {openStore} = require('../lib/store');
 const {createApp} = require('../lib/app');
 const {createLogger} = require('../lib/log');
 const {createUpstreamClient} = require('../lib/mirror/client');
-const {createScheduler} = require('../lib/mirror/scheduler');
+const {createMirror} = require('../lib/mirror/scheduler');
+const {applyUpstreams} = require('../lib/mirror/sources');
 const pkg = require('../package.json');
 
 async function main() {
@@ -25,13 +26,14 @@ async function main() {
     process.exit(2);
   }
   const store = await openStore(config.store.path);
+  // The configured upstream list (order, additions, removals, url changes) is
+  // applied before anything is served (spec section 6.8).
+  const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString());
+  if (rebuilt) log.info('mirror.upstreams', 'applied the upstream list', {upstreams: config.upstreams.length});
   const app = createApp({store, config, log});
-  const client = createUpstreamClient({
-    baseUrl: config.upstream.url,
-    userAgent: `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`,
-    maxDelayMs: config.upstream.intervalMinutes * 60000
-  });
-  const scheduler = createScheduler({store, client, log, config});
+  const userAgent = `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`;
+  const scheduler = createMirror({store, log, config,
+    clientFor: (u) => createUpstreamClient({baseUrl: u.url, userAgent, maxDelayMs: u.intervalMinutes * 60000})});
   const server = app.listen(config.listen.port, config.listen.host, () => {
     log.info('service.listen', 'listening', {host: config.listen.host, port: config.listen.port});
     scheduler.start();

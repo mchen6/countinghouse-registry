@@ -47,6 +47,14 @@ describe('mirror client', () => {
     assert.strictEqual(f.calls[0].init.headers['Accept-Encoding'], 'gzip');
   });
 
+  it('keeps a base URL path prefix (a registry served under a path)', async () => {
+    const f = fake([response(200, {version: '1'}), response(200, PAGE)]);
+    const {c} = client(f, {baseUrl: 'https://host.example/registry/'});
+    await c.version();
+    await c.page({});
+    assert.deepStrictEqual(f.calls.map((x) => new URL(x.url).pathname), ['/registry/v0.1/version', '/registry/v0.1/servers']);
+  });
+
   it('returns servers and nextCursor', async () => {
     const rec = {server: {name: 'a/x', version: '1'}, _meta: {'io.modelcontextprotocol.registry/official': {status: 'active'}}};
     const f = fake([response(200, {servers: [rec], metadata: {count: 1, nextCursor: 'n1'}})]);

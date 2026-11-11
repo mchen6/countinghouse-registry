@@ -27,10 +27,10 @@ describe('config', () => {
   it('applies the defaults', () => {
     const c = loadConfig(write(MIN));
     assert.deepStrictEqual(c.listen, {host: '127.0.0.1', port: 9800, trustProxy: false});
-    assert.deepStrictEqual(c.upstream, {
-      url: 'https://registry.modelcontextprotocol.io', intervalMinutes: 60,
+    assert.deepStrictEqual(c.upstreams, [{
+      name: 'official', url: 'https://registry.modelcontextprotocol.io', intervalMinutes: 60,
       reconcile: {everyDays: 7, atHour: 3}
-    });
+    }]);
     assert.deepStrictEqual(c.claims, []);
     assert.deepStrictEqual(c.publisherKeys, []);
     assert.deepStrictEqual(c.instances, []);
@@ -39,16 +39,37 @@ describe('config', () => {
 
   it('is deeply frozen', () => {
     const c = loadConfig(write(MIN));
-    assert.ok(Object.isFrozen(c) && Object.isFrozen(c.listen) && Object.isFrozen(c.upstream.reconcile));
+    assert.ok(Object.isFrozen(c) && Object.isFrozen(c.listen) && Object.isFrozen(c.upstreams[0].reconcile));
   });
 
   it('refuses a file that is not JSON', () => refuses('{nope', ''));
   it('refuses an unknown field', () => refuses({...MIN, upstrem: {}}, '/upstrem'));
   it('refuses an unknown nested field', () => refuses({...MIN, listen: {hots: 'x'}}, '/listen/hots'));
   it('refuses a missing store', () => refuses({secret: MIN.secret}, '/store'));
-  it('refuses intervalMinutes below 10', () => refuses({...MIN, upstream: {intervalMinutes: 9}}, '/upstream/intervalMinutes'));
-  it('refuses reconcile.everyDays below 1', () => refuses({...MIN, upstream: {reconcile: {everyDays: 0}}}, '/upstream/reconcile/everyDays'));
-  it('refuses reconcile.atHour outside 0-23', () => refuses({...MIN, upstream: {reconcile: {atHour: 24}}}, '/upstream/reconcile/atHour'));
+  const up = (o = {}) => ({name: 'official', url: 'https://registry.modelcontextprotocol.io', ...o});
+  it('refuses intervalMinutes below 10', () => refuses({...MIN, upstreams: [up({intervalMinutes: 9})]}, '/upstreams/0/intervalMinutes'));
+  it('refuses reconcile.everyDays below 1', () => refuses({...MIN, upstreams: [up({reconcile: {everyDays: 0}})]}, '/upstreams/0/reconcile/everyDays'));
+  it('refuses reconcile.atHour outside 0-23', () => refuses({...MIN, upstreams: [up({reconcile: {atHour: 24}})]}, '/upstreams/0/reconcile/atHour'));
+  it('fills an upstream entry\'s defaults', () => {
+    const c = loadConfig(write({...MIN, upstreams: [{name: 'own', url: 'https://registry.example'}]}));
+    assert.deepStrictEqual(c.upstreams, [{name: 'own', url: 'https://registry.example', intervalMinutes: 60, reconcile: {everyDays: 7, atHour: 3}}]);
+  });
+  it('refuses an upstream without a name or url', () => {
+    refuses({...MIN, upstreams: [{url: 'https://registry.example'}]}, '/upstreams/0/name');
+    refuses({...MIN, upstreams: [{name: 'own'}]}, '/upstreams/0/url');
+  });
+  it('refuses an upstream name that is not ^[a-z0-9][a-z0-9-]{0,30}$', () => {
+    refuses({...MIN, upstreams: [up({name: 'Own'})]}, '/upstreams/0/name');
+    refuses({...MIN, upstreams: [up({name: 'a'.repeat(32)})]}, '/upstreams/0/name');
+  });
+  it('refuses a duplicate upstream name', () => refuses({...MIN, upstreams: [up(), up({url: 'https://registry.example'})]}, '/upstreams/1/name'));
+  it('refuses a duplicate upstream url', () => refuses({...MIN, upstreams: [up(), up({name: 'other'})]}, '/upstreams/1/url'));
+  it('refuses the singular upstream key, saying what replaced it', () => {
+    refuses({...MIN, upstream: {url: 'https://registry.example'}}, '/upstream');
+    assert.throws(() => loadConfig(write({...MIN, upstream: {}})), /renamed to "upstreams"/);
+  });
+  it('refuses urls that differ only by a trailing slash as duplicates', () => refuses({...MIN, upstreams: [up({url: 'https://r.example'}), up({name: 'b', url: 'https://r.example/'})]}, '/upstreams/1/url'));
+  it('accepts an empty upstreams list', () => assert.deepStrictEqual(loadConfig(write({...MIN, upstreams: []})).upstreams, []));
   it('refuses a claim without a trailing slash', () => refuses({...MIN, claims: ['io.github.example']}, '/claims/0'));
   it('refuses a duplicate claim', () => refuses({...MIN, claims: ['com.example/', 'com.example/']}, '/claims/1'));
   it('refuses a non-boolean trustProxy', () => refuses({...MIN, listen: {trustProxy: 'yes'}}, '/listen/trustProxy'));
@@ -82,8 +103,9 @@ describe('config', () => {
     const c = loadConfig(write({...MIN, claims: ['io.github.example/'],
       publisherKeys: [{name: 'ops', algorithm: 'ed25519', publicKey: KEY, domains: ['example.com'], namespaces: ['io.github.example/'], operate: true}],
       instances: [{instance: 'gw-1', algorithm: 'ecdsa-p384', publicKey: KEY}],
-      upstream: {intervalMinutes: 10, reconcile: {everyDays: 1, atHour: 0}}, publicHosting: 'none'}));
+      upstreams: [up({intervalMinutes: 10, reconcile: {everyDays: 1, atHour: 0}}), {name: 'own', url: 'http://10.0.0.5:8080/'}], publicHosting: 'none'}));
     assert.strictEqual(c.publisherKeys[0].operate, true);
-    assert.strictEqual(c.upstream.intervalMinutes, 10);
+    assert.strictEqual(c.upstreams[0].intervalMinutes, 10);
+    assert.strictEqual(c.upstreams[1].name, 'own');
   });
 });

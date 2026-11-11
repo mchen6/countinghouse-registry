@@ -7,7 +7,7 @@ const {sendJson, problem, handle} = require('./http/problem');
 const {readCors} = require('./http/cors');
 const {serversRouter} = require('./read/servers');
 const {toServerResponse} = require('./read/response');
-const {mirrorState} = require('./mirror/sync');
+const {mirrorState, mirrorSummary} = require('./mirror/sync');
 
 const X = '/x/io.github.mchen6/countinghouse-registry';
 
@@ -42,7 +42,8 @@ function createApp({store, config, log, versionInfo = defaultVersionInfo(), now 
   read.get('/ping', (req, res) => sendJson(res, 200, {pong: true}));
   read.get('/version', (req, res) => sendJson(res, 200, versionInfo));
   read.get(`${X}/mirror`, handle(log, 'Failed to read the mirror state', async (req, res) => {
-    sendJson(res, 200, await mirrorState(store, now()));
+    // Public: the aggregate only; an upstream's name is the operator's topology.
+    sendJson(res, 200, mirrorSummary(await mirrorState(store, now())));
   }));
   read.get('/health', async (req, res) => {
     if (await storeOk(store)) sendJson(res, 200, {status: 'ok'});
@@ -52,9 +53,13 @@ function createApp({store, config, log, versionInfo = defaultVersionInfo(), now 
   for (const prefix of ['/v0.1', '/v0']) app.use(prefix, read);
 
   app.get('/healthz', async (req, res) => {
-    const mirror = await mirrorState(store, now()).catch(() => null);
-    if (await storeOk(store)) sendJson(res, 200, {ok: true, store: 'ok', mirror});
-    else sendJson(res, 503, {ok: false, store: 'error', mirror});
+    // Internal (the operator docs say not to expose it): the aggregate plus the
+    // named per-upstream list.
+    const all = await mirrorState(store, now()).catch(() => null);
+    const mirror = all && mirrorSummary(all);
+    const upstreams = all && all.upstreams;
+    if (await storeOk(store)) sendJson(res, 200, {ok: true, store: 'ok', mirror, upstreams});
+    else sendJson(res, 503, {ok: false, store: 'error', mirror, upstreams});
   });
 
   app.use((req, res) => problem(res, 404, 'Endpoint not found.'));

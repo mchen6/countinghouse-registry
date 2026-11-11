@@ -10,7 +10,7 @@ const {listen} = require('./http');
 
 const BASE_CONFIG = {
   listen: {host: '127.0.0.1', port: 9800, trustProxy: false},
-  upstream: {url: 'https://registry.example', intervalMinutes: 60, reconcile: {everyDays: 7, atHour: 3}},
+  upstreams: [{name: 'official', url: 'https://registry.example', intervalMinutes: 60, reconcile: {everyDays: 7, atHour: 3}}],
   claims: [], publisherKeys: [], instances: [], publicHosting: 'aggregate'
 };
 

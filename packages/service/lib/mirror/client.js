@@ -105,8 +105,12 @@ function createUpstreamClient({baseUrl, fetch = globalThis.fetch, userAgent, sle
     }
   }
 
+  // Relative to the base URL's path, so a registry served under a path prefix works.
+  const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+  const endpoint = (p) => new URL(p, base);
+
   async function page({cursor = null, updatedSince = null, signal = null} = {}) {
-    const u = new URL('/v0.1/servers', baseUrl);
+    const u = endpoint('v0.1/servers');
     u.searchParams.set('limit', '100');
     u.searchParams.set('include_deleted', 'true');
     if (cursor) u.searchParams.set('cursor', cursor);
@@ -120,7 +124,7 @@ function createUpstreamClient({baseUrl, fetch = globalThis.fetch, userAgent, sle
   // never holds up a sync.
   async function version({signal = null} = {}) {
     try {
-      const res = await fetchOnce(new URL('/v0.1/version', baseUrl).toString(), signal, VERSION_TIMEOUT_MS);
+      const res = await fetchOnce(endpoint('v0.1/version').toString(), signal, VERSION_TIMEOUT_MS);
       if (res.status !== 200) { await drain(res); return null; }
       const body = await bodyJson(res);
       return body && typeof body.version === 'string' ? body.version : null;

@@ -35,6 +35,21 @@ registry sends them.
 
 `_meta["io.github.mchen6/countinghouse-registry"]` on every record:
 `origin` (`local`, `mirror` or `local+upstream`), `changedAt`, and
-`mirroredAt` for records that came from the official registry. The official
+`mirroredAt` for records that came from an upstream registry. The official
 key `io.modelcontextprotocol.registry/official` is on every record; its name
-is historical and says nothing about where a record came from.
+is historical and says nothing about where a record came from. Public
+responses never say which upstream registry a mirrored record came from.
+
+## Extension endpoints
+
+Under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and `/v0/x/…`):
+
+- `GET …/mirror` (public): how complete the mirrored catalogue is, across
+  every upstream registry this one mirrors:
+  `{state, lastSuccessAt, lag, upstreams}`. `state` is the worst of the
+  upstreams' (`failed`, then `syncing`, then `idle`); `lastSuccessAt` is the
+  oldest of their last successful runs and `lag` the largest of their ages
+  in seconds, each `null` while it is unknown for any upstream (one that
+  has never completed a run);
+  `upstreams` is how many there are. While `state` is not `idle` the
+  catalogue may be partial or stale.
