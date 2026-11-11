@@ -11,13 +11,22 @@ const {spawn} = require('child_process');
 
 const OWNER = 'countinghouse-registry implementer';
 const POLL_MS = 500;
-const MAX_WAIT_MS = 30 * 60 * 1000;
+// How long to wait for another holder, in minutes: SUITE_LOCK_MAX_WAIT_MIN, default
+// 120 (a full countinghouse suite plus a queue holds the lock for over an hour).
+const DEFAULT_WAIT_MIN = 120;
 
 const [cmd, ...args] = process.argv.slice(2);
 if (!cmd) {
   process.stderr.write('usage: with-suite-lock <command> [args...]\n');
   process.exit(2);
 }
+const waitRaw = process.env.SUITE_LOCK_MAX_WAIT_MIN;
+const waitMin = waitRaw === undefined ? DEFAULT_WAIT_MIN : Number(waitRaw);
+if (!(waitMin > 0)) {
+  process.stderr.write(`with-suite-lock: SUITE_LOCK_MAX_WAIT_MIN must be a positive number of minutes, not "${waitRaw}"\n`);
+  process.exit(2);
+}
+const MAX_WAIT_MS = waitMin * 60 * 1000;
 
 const base = path.join(os.homedir(), 'countinghouse', '.superpowers');
 const lock = path.join(base, 'suite.lock');
@@ -47,7 +56,7 @@ function acquire(done) {
         process.exit(3);
       }
       if (Date.now() - started > MAX_WAIT_MS) {
-        process.stderr.write(`with-suite-lock: ${lock} still held after 30 minutes; giving up\n`);
+        process.stderr.write(`with-suite-lock: ${lock} still held after ${waitMin} minutes; giving up\n`);
         process.exit(3);
       }
       if (!told) {

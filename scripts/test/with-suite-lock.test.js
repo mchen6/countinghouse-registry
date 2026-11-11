@@ -7,9 +7,9 @@ const {spawn} = require('child_process');
 
 const SCRIPT = path.join(__dirname, '..', 'with-suite-lock.js');
 
-function run(home, args) {
+function run(home, args, env = {}) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], {env: {...process.env, HOME: home}, stdio: ['ignore', 'pipe', 'pipe']});
+    const child = spawn(process.execPath, [SCRIPT, ...args], {env: {...process.env, HOME: home, ...env}, stdio: ['ignore', 'pipe', 'pipe']});
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
@@ -71,5 +71,20 @@ describe('with-suite-lock', () => {
     const r = await run(home, [process.execPath, '-e', probe]);
     assert.match(r.out, /countinghouse-registry implementer, pid \d+/);
   });
-});
 
+  it('gives up after SUITE_LOCK_MAX_WAIT_MIN minutes with exit 3, leaving the other holder\'s lock alone', async () => {
+    fs.mkdirSync(lockDir(), {recursive: true});
+    fs.writeFileSync(path.join(lockDir(), 'owner'), 'someone else\n');
+    const started = Date.now();
+    const r = await run(home, [process.execPath, '-e', 'process.exit(0)'], {SUITE_LOCK_MAX_WAIT_MIN: '0.02'});
+    assert.strictEqual(r.code, 3, r.out);
+    assert.ok(Date.now() - started < 8000, 'did not honour the shorter wait');
+    assert.match(r.out, /still held after 0\.02 minutes/);
+    assert.strictEqual(fs.readFileSync(path.join(lockDir(), 'owner'), 'utf8'), 'someone else\n');
+  }).timeout(15000);
+
+  it('refuses a SUITE_LOCK_MAX_WAIT_MIN that is not a positive number', async () => {
+    const r = await run(home, [process.execPath, '-e', 'process.exit(0)'], {SUITE_LOCK_MAX_WAIT_MIN: 'soon'});
+    assert.strictEqual(r.code, 2, r.out);
+  });
+});
