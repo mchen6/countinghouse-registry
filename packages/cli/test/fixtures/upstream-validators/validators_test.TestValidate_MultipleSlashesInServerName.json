@@ -1,0 +1,168 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate_MultipleSlashesInServerName",
+  "cases": [
+    {
+      "name": "single slash - valid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/my-server",
+        "description": "",
+        "version": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "two slashes - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/my-server/extra",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "three slashes - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/my/server/name",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "many slashes - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/a/b/c/d/e",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "double slash - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example//server",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "trailing slash counts as two - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server/",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "no slash - still invalid for different reason",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example.server",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name must be in format 'dns-namespace/name'",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "complex valid namespace with single slash",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.microsoft.azure.service/webapp-server",
+        "description": "",
+        "version": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "complex namespace with multiple slashes - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.microsoft.azure/service/webapp-server",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    }
+  ]
+}

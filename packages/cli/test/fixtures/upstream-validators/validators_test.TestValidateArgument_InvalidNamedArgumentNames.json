@@ -1,0 +1,274 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidateArgument_InvalidNamedArgumentNames",
+  "cases": [
+    {
+      "name": "Invalid_contains_description",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "--directory <absolute_path_to_adfin_mcp_folder>"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "invalid-named-argument-name"
+      ]
+    },
+    {
+      "name": "Invalid_contains_value",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "--port 8080"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "invalid-named-argument-name"
+      ]
+    },
+    {
+      "name": "Invalid_contains_dollar",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "--config $CONFIG_FILE"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "invalid-named-argument-name"
+      ]
+    },
+    {
+      "name": "Invalid_contains_brackets",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "--file <path>"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "invalid-named-argument-name"
+      ]
+    },
+    {
+      "name": "Invalid_empty_name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "named-argument-name-required"
+      ]
+    },
+    {
+      "name": "Invalid_has_spaces",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "name with spaces"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "references": [
+        "invalid-named-argument-name"
+      ]
+    }
+  ]
+}

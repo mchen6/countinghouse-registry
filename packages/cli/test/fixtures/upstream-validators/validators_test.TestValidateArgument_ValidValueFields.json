@@ -1,0 +1,220 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidateArgument_ValidValueFields",
+  "cases": [
+    {
+      "name": "Valid_value_without_name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "8080",
+                "type": "named",
+                "name": "--port"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Valid_default_without_name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "default": "/etc/app.conf",
+                "type": "named",
+                "name": "--config"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Valid_value_with_var",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "$REPOSITORY_DIRECTORY",
+                "type": "named",
+                "name": "--with-editable"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Valid_absolute_path",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "/absolute/path/to/directory",
+                "type": "named",
+                "name": "--directory"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Valid_contains_but_not_starts_with_name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "use --port for configuration",
+                "type": "named",
+                "name": "--port"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    }
+  ]
+}

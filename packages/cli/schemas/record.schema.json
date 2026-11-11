@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mchen6/countinghouse-registry/schemas/record.schema.json",
+  "title": "countinghouse module record, recordVersion 1",
+  "description": "One countinghouse module name@version (countinghouse-registry spec section 8.1). Tool items require name and inputSchema and are otherwise open; permissions are as declared, before operator policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recordVersion", "countinghouse", "tools", "calls", "permissions"],
+  "properties": {
+    "recordVersion": {"const": 1},
+    "countinghouse": {"type": "string", "minLength": 1},
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "inputSchema"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "inputSchema": {"type": "object"}
+        }
+      }
+    },
+    "calls": {"type": "array", "items": {"type": "string"}},
+    "permissions": {"type": "object"}
+  }
+}

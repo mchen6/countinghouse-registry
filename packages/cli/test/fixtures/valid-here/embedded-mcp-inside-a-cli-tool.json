@@ -1,0 +1,37 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#Embedded MCP inside a CLI tool",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.snyk/cli-mcp",
+    "description": "MCP server provided by the Snyk CLI",
+    "title": "Snyk",
+    "version": "1.1298.0",
+    "packages": [
+      {
+        "registryType": "npm",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "identifier": "snyk",
+        "version": "1.1298.0",
+        "transport": {
+          "type": "stdio"
+        },
+        "packageArguments": [
+          {
+            "type": "positional",
+            "value": "mcp"
+          },
+          {
+            "type": "named",
+            "name": "-t",
+            "description": "Transport type for MCP server",
+            "default": "stdio",
+            "choices": [
+              "stdio",
+              "sse"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

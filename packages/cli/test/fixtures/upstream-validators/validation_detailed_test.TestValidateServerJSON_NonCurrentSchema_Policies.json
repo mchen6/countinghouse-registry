@@ -1,0 +1,79 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_NonCurrentSchema_Policies",
+  "cases": [
+    {
+      "name": "Allow policy - no warning or error",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "allow"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+        "name": "com.example.test/server",
+        "description": "Test server",
+        "repository": {
+          "url": "https://github.com/example/server",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true,
+      "schemaVersionIssues": 0
+    },
+    {
+      "name": "Warn policy - warning but still valid",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+        "name": "com.example.test/server",
+        "description": "Test server",
+        "repository": {
+          "url": "https://github.com/example/server",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true,
+      "schemaVersionIssues": 1,
+      "hasIssues": [
+        {
+          "path": "schema",
+          "severity": "warning",
+          "messageContains": "not the current version"
+        }
+      ]
+    },
+    {
+      "name": "Error policy - error and invalid",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "error"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+        "name": "com.example.test/server",
+        "description": "Test server",
+        "repository": {
+          "url": "https://github.com/example/server",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "schemaVersionIssues": 1,
+      "hasIssues": [
+        {
+          "path": "schema",
+          "severity": "error",
+          "messageContains": "not the current version"
+        }
+      ]
+    }
+  ]
+}

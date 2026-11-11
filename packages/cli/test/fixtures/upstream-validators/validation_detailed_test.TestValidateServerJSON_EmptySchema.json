@@ -1,0 +1,32 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_EmptySchema",
+  "cases": [
+    {
+      "name": "empty schema",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "",
+        "name": "com.example.test/server",
+        "description": "Test server",
+        "repository": {
+          "url": "https://github.com/example/server",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "hasIssues": [
+        {
+          "path": "schema",
+          "severity": "error",
+          "messageContains": "$schema field is required",
+          "reference": "schema-field-required"
+        }
+      ]
+    }
+  ]
+}

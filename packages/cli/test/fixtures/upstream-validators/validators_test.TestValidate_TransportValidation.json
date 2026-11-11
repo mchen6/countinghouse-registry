@@ -1,0 +1,613 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate_TransportValidation",
+  "cases": [
+    {
+      "name": "package transport stdio without URL should pass",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "package transport stdio with URL (should fail)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio",
+              "url": "ignored-for-stdio"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "url must be empty for stdio transport type",
+      "references": [
+        "stdio-transport-url-not-empty"
+      ]
+    },
+    {
+      "name": "package transport streamable-http with valid URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "streamable-http",
+              "url": "https://example.com/mcp"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "package transport streamable-http with templated URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "streamable-http",
+              "url": "http://{host}:{port}/mcp"
+            },
+            "environmentVariables": [
+              {
+                "name": "host"
+              },
+              {
+                "name": "port"
+              }
+            ]
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "package transport streamable-http without URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "streamable-http"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "url is required for streamable-http transport type",
+      "references": [
+        "streamable-transport-url-required"
+      ]
+    },
+    {
+      "name": "package transport streamable-http with templated URL missing variables",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "streamable-http",
+              "url": "http://{host}:{port}/mcp"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "template variables in URL",
+      "references": [
+        "invalid-templated-url"
+      ]
+    },
+    {
+      "name": "package transport sse with valid URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "sse",
+              "url": "https://example.com/events"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "package transport sse without URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "sse"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "url is required for sse transport type",
+      "references": [
+        "streamable-transport-url-required"
+      ]
+    },
+    {
+      "name": "package transport unsupported type",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "websocket"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "unsupported transport type: websocket",
+      "references": [
+        "unsupported-transport-type"
+      ]
+    },
+    {
+      "name": "remote transport streamable-http with valid URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport streamable-http without URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "url is required for streamable-http transport type",
+      "references": [
+        "remote-transport-url-required"
+      ]
+    },
+    {
+      "name": "remote transport sse with valid URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://example.com/events"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport sse without URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "sse"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "url is required for sse transport type",
+      "references": [
+        "remote-transport-url-required"
+      ]
+    },
+    {
+      "name": "remote transport stdio not supported",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "stdio"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "unsupported transport type for remotes: stdio",
+      "references": [
+        "unsupported-remote-transport-type"
+      ]
+    },
+    {
+      "name": "remote transport unsupported type",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "websocket",
+            "url": "wss://example.com/ws"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "unsupported transport type for remotes: websocket",
+      "references": [
+        "unsupported-remote-transport-type"
+      ]
+    },
+    {
+      "name": "package transport allows localhost URLs",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "transport": {
+              "type": "streamable-http",
+              "url": "http://localhost:3000/mcp"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport rejects localhost URLs",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "http://localhost:3000/mcp"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "remote transport with URL variables - valid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp/{tenant_id}",
+            "variables": {
+              "tenant_id": {
+                "description": "Tenant identifier",
+                "isRequired": true
+              }
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport with multiple URL variables - valid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://{region}.example.com/mcp/{tenant_id}",
+            "variables": {
+              "region": {
+                "description": "Server region",
+                "choices": [
+                  "us-east-1",
+                  "eu-west-1"
+                ]
+              },
+              "tenant_id": {
+                "description": "Tenant identifier",
+                "isRequired": true
+              }
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport with undefined URL variable - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp/{tenant_id}"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "template variables in URL",
+      "references": [
+        "invalid-templated-url"
+      ]
+    },
+    {
+      "name": "remote transport with missing variable in URL - invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp/{tenant_id}/{region}",
+            "variables": {
+              "tenant_id": {
+                "description": "Tenant identifier"
+              }
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "template variables in URL",
+      "references": [
+        "invalid-templated-url"
+      ]
+    },
+    {
+      "name": "remote transport SSE with URL variables - valid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "sse",
+            "url": "https://events.example.com/mcp/{api_key}",
+            "variables": {
+              "api_key": {
+                "description": "API key for authentication",
+                "isRequired": true,
+                "isSecret": true
+              }
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "remote transport with variables but no template in URL - valid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp",
+            "variables": {
+              "unused_var": {
+                "description": "This variable is defined but not used"
+              }
+            }
+          }
+        ]
+      },
+      "valid": true
+    }
+  ]
+}

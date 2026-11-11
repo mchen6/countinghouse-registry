@@ -1,0 +1,64 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_CollectsAllErrors",
+  "cases": [
+    {
+      "name": "collects all errors",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "",
+        "name": "invalid-name",
+        "description": "Test server",
+        "repository": {
+          "url": "not-a-valid-url",
+          "source": "github"
+        },
+        "version": "^1.0.0",
+        "websiteUrl": "ftp://invalid-scheme.com",
+        "packages": [
+          {
+            "registryType": "oci",
+            "registryBaseUrl": "https://docker.io",
+            "identifier": "package with spaces",
+            "version": "latest",
+            "transport": {
+              "type": "stdio",
+              "url": "should-not-have-url"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "--port <port>"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "stdio"
+          }
+        ]
+      },
+      "valid": false,
+      "minIssues": 6,
+      "issuePathsAtLeast": {
+        "count": 6,
+        "of": [
+          "name",
+          "version",
+          "repository.url",
+          "websiteUrl",
+          "packages[0].identifier",
+          "packages[0].version",
+          "packages[0].transport.url",
+          "packages[0].runtimeArguments[0].name",
+          "remotes[0].type",
+          "remotes[0].url"
+        ]
+      }
+    }
+  ]
+}

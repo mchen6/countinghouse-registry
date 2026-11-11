@@ -1,0 +1,47 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#NuGet (.NET) Package Example",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.joelverhagen/knapcode-samplemcpserver",
+    "description": "Sample NuGet MCP server for a random number and random weather",
+    "repository": {
+      "url": "https://github.com/joelverhagen/Knapcode.SampleMcpServer",
+      "source": "github",
+      "id": "example-nuget-id-0000-1111-222222222222"
+    },
+    "version": "0.5.0",
+    "packages": [
+      {
+        "registryType": "nuget",
+        "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+        "identifier": "Knapcode.SampleMcpServer",
+        "version": "0.5.0",
+        "runtimeHint": "dnx",
+        "transport": {
+          "type": "stdio"
+        },
+        "environmentVariables": [
+          {
+            "name": "WEATHER_CHOICES",
+            "description": "Comma separated list of weather descriptions to randomly select.",
+            "isRequired": true,
+            "isSecret": false
+          }
+        ]
+      }
+    ],
+    "_meta": {
+      "io.modelcontextprotocol.registry/publisher-provided": {
+        "tool": "dotnet-publisher",
+        "version": "8.0.100",
+        "build_info": {
+          "dotnet_version": "8.0.0",
+          "timestamp": "2023-12-10T12:15:00Z",
+          "configuration": "Release",
+          "target_framework": "net8.0",
+          "build_number": "20231210.1"
+        }
+      }
+    }
+  }
+}

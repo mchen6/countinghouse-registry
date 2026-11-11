@@ -73,6 +73,18 @@ are your topology. It answers 200 while the store answers and 503 when it
 does not. Public clients have `GET /v0.1/health` (`{status: "ok"}`, as the
 official registry) and the mirror endpoint above.
 
+## Release checklist
+
+- Run `node scripts/check-upstream-validate.js`. It posts each "valid here"
+  example (`packages/cli/test/fixtures/valid-here/`) to the official
+  registry's `POST /v0.1/validate` and fails if upstream finds any of them
+  invalid. This is the manual half of the rule that a `server.json` valid
+  here is publishable upstream (spec section 14). It is never run in CI.
+- When the pinned upstream commit moves, regenerate the ported validator
+  cases from a clone at the new commit:
+  `node scripts/port-upstream-fixtures.js <clone>`. The script reads
+  upstream's Go test tables and runs no Go code.
+
 ## Backups (spec section 13.3)
 
 The SQLite file and its `-wal` file are the registry's only state. For a

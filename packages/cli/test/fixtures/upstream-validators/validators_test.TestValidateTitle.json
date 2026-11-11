@@ -1,0 +1,408 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidateTitle",
+  "cases": [
+    {
+      "name": "Valid title without MCP suffix",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "GitHub",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Valid title with multiple words",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "Weather API",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Empty title is allowed (optional field)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Allows title with 'MCP Server' suffix",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "GitHub MCP Server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Allows title with 'MCP' suffix",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "GitHub MCP",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Allows title with 'mcp server' suffix (lowercase)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "GitHub mcp server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Allows title with hyphenated 'MCP' suffix",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "GitHub-MCP",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Allows 'MCP' in the middle of title",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "MCP Weather API",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Rejects title with only whitespace",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "title": "   ",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "title cannot be only whitespace",
+      "references": [
+        "title-whitespace-only"
+      ]
+    },
+    {
+      "name": "Accepts valid icon with HTTPS URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://example.com/icon.png"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Accepts icon with all optional fields",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://example.com/icon.png",
+            "mimeType": "image/png",
+            "sizes": [
+              "48x48",
+              "96x96"
+            ],
+            "theme": "light"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Accepts icon with 'any' size for SVG",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://example.com/icon.svg",
+            "mimeType": "image/svg+xml",
+            "sizes": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Accepts icon with dark theme",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://example.com/icon-dark.png",
+            "theme": "dark"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Accepts multiple icons",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "https://example.com/icon-light.png",
+            "theme": "light"
+          },
+          {
+            "src": "https://example.com/icon-dark.png",
+            "theme": "dark"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Rejects icon with HTTP URL (not HTTPS)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "http://example.com/icon.png"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "icon src must use https scheme",
+      "references": [
+        "icon-src-invalid-scheme"
+      ]
+    },
+    {
+      "name": "Rejects icon with data URI",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "icon src must use https scheme",
+      "references": [
+        "icon-src-invalid-scheme"
+      ]
+    },
+    {
+      "name": "Rejects icon with relative URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "icons": [
+          {
+            "src": "/icon.png"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "icon src must be an absolute URL",
+      "references": [
+        "icon-src-not-absolute"
+      ]
+    }
+  ]
+}

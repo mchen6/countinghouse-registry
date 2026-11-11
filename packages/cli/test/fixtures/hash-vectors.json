@@ -1,0 +1,32 @@
+{
+  "source": "countinghouse@79ff02deafb7df5765f70bc7f8a5719719258286:test/mcp-contract/05-output-schema-hash.js (the sha256 values computed with sha256sum over the canonical strings, independently of this code)",
+  "same": [
+    [
+      {"type": "object", "properties": {"b": {"type": "string"}, "a": {"type": "number", "enum": [2, 1]}}, "required": ["b", "a"]},
+      {"required": ["b", "a"], "properties": {"a": {"enum": [2, 1], "type": "number"}, "b": {"type": "string"}}, "type": "object"}
+    ],
+    [
+      {"type": "object", "properties": {"text": {"type": "string"}}},
+      {"properties": {"text": {"type": "string"}}, "type": "object"}
+    ]
+  ],
+  "different": [
+    [{"required": ["a", "b"]}, {"required": ["b", "a"]}],
+    [
+      {"type": "object", "properties": {"text": {"type": "string"}}},
+      {"type": "object", "properties": {"text": {"type": "string"}, "n": {"type": "number"}}}
+    ]
+  ],
+  "canonical": [
+    {
+      "value": {"type": "object", "properties": {"b": {"type": "string"}, "a": {"type": "number", "enum": [2, 1]}}, "required": ["b", "a"]},
+      "json": "{\"properties\":{\"a\":{\"enum\":[2,1],\"type\":\"number\"},\"b\":{\"type\":\"string\"}},\"required\":[\"b\",\"a\"],\"type\":\"object\"}",
+      "sha256": "a24014237de96c2c5326ac485656bfe0cda0d861703f2e1eeedbbe10102a31d9"
+    },
+    {
+      "value": {"type": "object", "properties": {"text": {"type": "string"}}},
+      "json": "{\"properties\":{\"text\":{\"type\":\"string\"}},\"type\":\"object\"}",
+      "sha256": "d95b00b27ca2bbbe11efb4ebcf3e4ee4d61036c801831bccac81b321af6737e5"
+    }
+  ]
+}

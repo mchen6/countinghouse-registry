@@ -1,0 +1,1311 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate",
+  "cases": [
+    {
+      "name": "Schema version is required",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "$schema field is required",
+      "references": [
+        "schema-field-required"
+      ]
+    },
+    {
+      "name": "Schema version rejects old schema (2025-01-27) - non-existent version",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-01-27/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "schema version 2025-01-27 not found in embedded schemas",
+      "references": [
+        "schema-version-not-available"
+      ]
+    },
+    {
+      "name": "Schema version accepts current schema (2025-10-17)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "Version rejects top-level version ranges",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "^1.2.3"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "rejects package version ranges",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "version": ">=1.2.3",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "Version allows specific versions (semver)",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.2.3",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "version": "1.2.3-alpha.1",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Version allows specific non-semver versions",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "2021.03.15",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "test-package",
+            "version": "snapshot",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "Version rejects wildcard and x-range",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.x"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "Version rejects wildcard *",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.*"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "Version allows freeform version with hyphen not a range",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "snapshot - 2025.09"
+      },
+      "valid": true
+    },
+    {
+      "name": "Version rejects hyphen range of two versions",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.2.3 - 2.0.0"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "Version rejects OR range with two versions",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.2 || 1.3"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "Version rejects comparator with space",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": ">= 1.2.3"
+      },
+      "valid": false,
+      "firstError": "version must be a specific version, not a range",
+      "references": [
+        "version-looks-like-range"
+      ]
+    },
+    {
+      "name": "server name with two slashes",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server/path",
+        "description": "A test server",
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "server name with three slashes",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server/path/deep",
+        "description": "A test server",
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "server without repository",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "valid server detail with all fields",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/docs",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "server with empty repository",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {},
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "repository url is required when repository is provided",
+      "references": [
+        "repository-url-required"
+      ]
+    },
+    {
+      "name": "server with repository missing URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "repository url is required when repository is provided",
+      "references": [
+        "repository-url-required"
+      ]
+    },
+    {
+      "name": "server with repository missing source",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "repository source is required when repository is provided",
+      "references": [
+        "repository-source-required"
+      ]
+    },
+    {
+      "name": "server with invalid repository source",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://bitbucket.org/owner/repo",
+          "source": "bitbucket"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid repository URL",
+      "references": [
+        "invalid-repository-url"
+      ]
+    },
+    {
+      "name": "server with invalid GitHub URL format",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid repository URL",
+      "references": [
+        "invalid-repository-url"
+      ]
+    },
+    {
+      "name": "server with invalid GitLab URL format",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://gitlab.com",
+          "source": "gitlab"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid repository URL",
+      "references": [
+        "invalid-repository-url"
+      ]
+    },
+    {
+      "name": "server with valid GitLab subgroup URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://gitlab.com/group/subgroup/repo",
+          "source": "gitlab"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with valid repository subfolder",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "servers/my-server"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with repository subfolder containing path traversal",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "../parent/folder"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid subfolder path",
+      "references": [
+        "invalid-subfolder-path"
+      ]
+    },
+    {
+      "name": "server with repository subfolder starting with slash",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "/absolute/path"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid subfolder path",
+      "references": [
+        "invalid-subfolder-path"
+      ]
+    },
+    {
+      "name": "server with repository subfolder ending with slash",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "servers/my-server/"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid subfolder path",
+      "references": [
+        "invalid-subfolder-path"
+      ]
+    },
+    {
+      "name": "server with repository subfolder containing invalid characters",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "servers/my server"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid subfolder path",
+      "references": [
+        "invalid-subfolder-path"
+      ]
+    },
+    {
+      "name": "server with repository subfolder containing empty segments",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "subfolder": "servers//my-server"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "firstError": "invalid subfolder path",
+      "references": [
+        "invalid-subfolder-path"
+      ]
+    },
+    {
+      "name": "server with valid websiteUrl",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/docs"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with invalid websiteUrl - no scheme",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "example.com/docs"
+      },
+      "valid": false,
+      "firstError": "websiteUrl must be absolute (include scheme): example.com/docs",
+      "references": [
+        "website-url-must-be-absolute"
+      ]
+    },
+    {
+      "name": "server with invalid websiteUrl - invalid scheme",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "ftp://example.com/docs"
+      },
+      "valid": false,
+      "firstError": "websiteUrl must use https scheme: ftp://example.com/docs",
+      "references": [
+        "website-url-invalid-scheme"
+      ]
+    },
+    {
+      "name": "server with invalid websiteUrl - required HTTPS",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "http://example.com/docs"
+      },
+      "valid": false,
+      "firstError": "websiteUrl must use https scheme: http://example.com/docs",
+      "references": [
+        "website-url-invalid-scheme"
+      ]
+    },
+    {
+      "name": "server with malformed websiteUrl",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "ht tp://example.com/docs"
+      },
+      "valid": false,
+      "firstError": "invalid websiteUrl:",
+      "references": [
+        "invalid-website-url"
+      ]
+    },
+    {
+      "name": "server with websiteUrl containing double quote",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/\"oops"
+      },
+      "valid": false,
+      "firstError": "websiteUrl contains an invalid character",
+      "references": [
+        "website-url-invalid-characters"
+      ]
+    },
+    {
+      "name": "server with websiteUrl containing single quote",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/it's"
+      },
+      "valid": false,
+      "firstError": "websiteUrl contains an invalid character",
+      "references": [
+        "website-url-invalid-characters"
+      ]
+    },
+    {
+      "name": "server with websiteUrl containing angle brackets",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/<x>"
+      },
+      "valid": false,
+      "firstError": "websiteUrl contains an invalid character",
+      "references": [
+        "website-url-invalid-characters"
+      ]
+    },
+    {
+      "name": "server with websiteUrl containing space",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/has space"
+      },
+      "valid": false,
+      "firstError": "websiteUrl contains an invalid character",
+      "references": [
+        "website-url-invalid-characters"
+      ]
+    },
+    {
+      "name": "server with websiteUrl containing newline",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/has\nnewline"
+      },
+      "valid": false,
+      "firstError": "invalid websiteUrl:",
+      "references": [
+        "invalid-website-url"
+      ]
+    },
+    {
+      "name": "server with websiteUrl with percent-encoded special chars is accepted",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/path/?q=hello%20world&r=a%22b"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with websiteUrl that matches namespace domain",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://example.com/docs"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with websiteUrl subdomain that matches namespace",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://docs.example.com/mcp"
+      },
+      "valid": true
+    },
+    {
+      "name": "server with websiteUrl that does not match namespace",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "websiteUrl": "https://different.com/docs"
+      },
+      "valid": true
+    },
+    {
+      "name": "package with spaces in name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test package with spaces",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "package name cannot contain spaces",
+      "references": [
+        "package-name-has-spaces"
+      ]
+    },
+    {
+      "name": "package with reserved version 'latest'",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "version": "latest",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "version string 'latest' is reserved and cannot be used",
+      "references": [
+        "reserved-version-string"
+      ]
+    },
+    {
+      "name": "multiple packages with one invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "valid-package",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "pypi",
+            "registryBaseUrl": "https://pypi.org",
+            "identifier": "invalid package",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "package name cannot contain spaces",
+      "references": [
+        "package-name-has-spaces"
+      ]
+    },
+    {
+      "name": "remote with invalid URL",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "not-a-valid-url"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "remote with missing scheme",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "remote with localhost url",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "http://localhost"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "remote with localhost url with port",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "http://localhost:3000"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "multiple remotes with one invalid",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://valid.com/remote"
+          },
+          {
+            "type": "streamable-http",
+            "url": "invalid-url"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "server detail with nil packages and remotes",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    },
+    {
+      "name": "server detail with empty packages and remotes slices",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": true
+    }
+  ]
+}

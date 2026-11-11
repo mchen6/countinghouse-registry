@@ -1,0 +1,107 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#Complex Docker Server with Multiple Arguments",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.example/database-manager",
+    "description": "MCP server for database operations with support for multiple database types",
+    "repository": {
+      "url": "https://github.com/example/database-manager-mcp",
+      "source": "github",
+      "id": "ghi789jk-lmno-1234-pqrs-tuvwxyz56789"
+    },
+    "version": "3.1.0",
+    "packages": [
+      {
+        "registryType": "oci",
+        "identifier": "docker.io/example/database-manager-mcp:3.1.0",
+        "transport": {
+          "type": "stdio"
+        },
+        "runtimeArguments": [
+          {
+            "type": "named",
+            "name": "--network",
+            "value": "host",
+            "description": "Use host network mode"
+          },
+          {
+            "type": "named",
+            "name": "-e",
+            "value": "DB_TYPE={db_type}",
+            "description": "Database type to connect to",
+            "isRepeated": true,
+            "variables": {
+              "db_type": {
+                "description": "Type of database",
+                "choices": [
+                  "postgres",
+                  "mysql",
+                  "mongodb",
+                  "redis"
+                ],
+                "isRequired": true
+              }
+            }
+          }
+        ],
+        "packageArguments": [
+          {
+            "type": "named",
+            "name": "--host",
+            "description": "Database host",
+            "default": "localhost",
+            "isRequired": true
+          },
+          {
+            "type": "named",
+            "name": "--port",
+            "description": "Database port",
+            "format": "number"
+          },
+          {
+            "type": "positional",
+            "valueHint": "database_name",
+            "description": "Name of the database to connect to",
+            "isRequired": true
+          }
+        ],
+        "environmentVariables": [
+          {
+            "name": "DB_USERNAME",
+            "description": "Database username",
+            "isRequired": true
+          },
+          {
+            "name": "DB_PASSWORD",
+            "description": "Database password",
+            "isRequired": true,
+            "isSecret": true
+          },
+          {
+            "name": "SSL_MODE",
+            "description": "SSL connection mode",
+            "default": "prefer",
+            "choices": [
+              "disable",
+              "prefer",
+              "require"
+            ]
+          }
+        ]
+      }
+    ],
+    "_meta": {
+      "io.modelcontextprotocol.registry/publisher-provided": {
+        "tool": "docker-buildx",
+        "version": "0.12.1",
+        "build_info": {
+          "docker_version": "24.0.7",
+          "timestamp": "2023-12-08T14:30:00Z",
+          "platform": "linux/amd64,linux/arm64",
+          "registry": "docker.io",
+          "image_digest": "sha256:1a2b3c4d5e6f7890"
+        }
+      }
+    }
+  }
+}

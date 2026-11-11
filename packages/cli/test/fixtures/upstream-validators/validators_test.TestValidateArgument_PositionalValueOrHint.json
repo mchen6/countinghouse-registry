@@ -1,0 +1,177 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidateArgument_PositionalValueOrHint",
+  "cases": [
+    {
+      "name": "missing_value_and_value_hint",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "positional"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "positional argument must provide a value or a valueHint",
+      "references": [
+        "positional-argument-value-or-hint-required"
+      ]
+    },
+    {
+      "name": "value_only",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "input.txt",
+                "type": "positional"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "value_hint_only",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "positional",
+                "valueHint": "file_path"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "value_and_value_hint",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "test-package",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "value": "input.txt",
+                "type": "positional",
+                "valueHint": "file_path"
+              }
+            ]
+          }
+        ],
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/remote"
+          }
+        ]
+      },
+      "valid": true
+    }
+  ]
+}

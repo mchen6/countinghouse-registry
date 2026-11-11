@@ -1,0 +1,30 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#Local Server with URL Templating",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.example/configurable-server",
+    "description": "Local MCP server with configurable port",
+    "title": "Configurable Server",
+    "version": "1.0.0",
+    "packages": [
+      {
+        "registryType": "npm",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "identifier": "@example/mcp-server",
+        "version": "1.0.0",
+        "transport": {
+          "type": "streamable-http",
+          "url": "http://localhost:{--port}/mcp"
+        },
+        "packageArguments": [
+          {
+            "type": "named",
+            "name": "--port",
+            "description": "Port for the server to listen on",
+            "default": "3000"
+          }
+        ]
+      }
+    ]
+  }
+}

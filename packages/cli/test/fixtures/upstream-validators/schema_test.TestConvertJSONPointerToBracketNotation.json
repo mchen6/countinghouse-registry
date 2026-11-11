@@ -1,0 +1,85 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/schema_test.go#TestConvertJSONPointerToBracketNotation",
+  "cases": [
+    {
+      "name": "single array index in middle",
+      "pointer": "/packages/0/transport",
+      "expected": "packages[0].transport"
+    },
+    {
+      "name": "multiple array indices",
+      "pointer": "/packages/0/transport/1/url",
+      "expected": "packages[0].transport[1].url"
+    },
+    {
+      "name": "leading array index",
+      "pointer": "/0/name",
+      "expected": "[0].name"
+    },
+    {
+      "name": "trailing array index",
+      "pointer": "/packages/0",
+      "expected": "packages[0]"
+    },
+    {
+      "name": "no array indices",
+      "pointer": "/name/version",
+      "expected": "name.version"
+    },
+    {
+      "name": "complex nested path",
+      "pointer": "/packages/0/runtimeArguments/1/name",
+      "expected": "packages[0].runtimeArguments[1].name"
+    },
+    {
+      "name": "multiple consecutive indices",
+      "pointer": "/a/0/1/2",
+      "expected": "a[0][1][2]"
+    },
+    {
+      "name": "single character path with index",
+      "pointer": "/a/0",
+      "expected": "a[0]"
+    },
+    {
+      "name": "empty string",
+      "pointer": "",
+      "expected": ""
+    },
+    {
+      "name": "root path",
+      "pointer": "/",
+      "expected": ""
+    },
+    {
+      "name": "only index",
+      "pointer": "/0",
+      "expected": "[0]"
+    },
+    {
+      "name": "two digit index",
+      "pointer": "/packages/10/transport",
+      "expected": "packages[10].transport"
+    },
+    {
+      "name": "three digit index",
+      "pointer": "/packages/123/transport",
+      "expected": "packages[123].transport"
+    },
+    {
+      "name": "remotes array index",
+      "pointer": "/remotes/0/url",
+      "expected": "remotes[0].url"
+    },
+    {
+      "name": "package arguments nested",
+      "pointer": "/packages/0/packageArguments/0/format",
+      "expected": "packages[0].packageArguments[0].format"
+    },
+    {
+      "name": "repository url",
+      "pointer": "/repository/url",
+      "expected": "repository.url"
+    }
+  ]
+}

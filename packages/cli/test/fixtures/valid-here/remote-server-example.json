@@ -1,0 +1,32 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#Remote Server Example",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.modelcontextprotocol.anonymous/mcp-fs",
+    "description": "Cloud-hosted MCP filesystem server",
+    "repository": {
+      "url": "https://github.com/example/remote-fs",
+      "source": "github",
+      "id": "xyz789ab-cdef-0123-4567-890ghijklmno"
+    },
+    "version": "2.0.0",
+    "remotes": [
+      {
+        "type": "streamable-http",
+        "url": "https://mcp-fs.anonymous.modelcontextprotocol.io/http"
+      }
+    ],
+    "_meta": {
+      "io.modelcontextprotocol.registry/publisher-provided": {
+        "tool": "cloud-deployer",
+        "version": "2.4.0",
+        "build_info": {
+          "commit": "f7e8d9c2b1a0",
+          "timestamp": "2023-12-05T08:45:00Z",
+          "deployment_id": "remote-fs-deploy-456",
+          "region": "us-west-2"
+        }
+      }
+    }
+  }
+}

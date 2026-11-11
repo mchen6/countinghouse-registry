@@ -1,0 +1,130 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate_ServerNameFormat",
+  "cases": [
+    {
+      "name": "valid namespace/name format",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example.api/server",
+        "description": "",
+        "version": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "valid complex namespace",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.microsoft.azure.service/webapp-server",
+        "description": "",
+        "version": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "empty server name",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name is required",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "missing slash separator",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example.server",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name must be in format 'dns-namespace/name'",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "empty namespace part",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "/server-name",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "non-empty namespace and name parts",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "empty name part",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "non-empty namespace and name parts",
+      "references": [
+        "invalid-server-name"
+      ]
+    },
+    {
+      "name": "multiple slashes - should be rejected",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server/path",
+        "description": "",
+        "version": ""
+      },
+      "valid": false,
+      "firstError": "server name cannot contain multiple slashes",
+      "references": [
+        "invalid-server-name"
+      ]
+    }
+  ]
+}

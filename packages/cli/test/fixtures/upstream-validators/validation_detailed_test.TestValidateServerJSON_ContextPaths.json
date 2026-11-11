@@ -1,0 +1,68 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_ContextPaths",
+  "cases": [
+    {
+      "name": "context paths",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "",
+        "name": "com.example.test/server",
+        "description": "",
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "oci",
+            "registryBaseUrl": "https://docker.io",
+            "identifier": "package-1",
+            "version": "latest",
+            "transport": {
+              "type": "stdio"
+            }
+          },
+          {
+            "registryType": "oci",
+            "registryBaseUrl": "https://docker.io",
+            "identifier": "package-2",
+            "version": "2.0.0",
+            "transport": {
+              "type": "stdio"
+            },
+            "runtimeArguments": [
+              {
+                "type": "named",
+                "name": "invalid name"
+              },
+              {
+                "type": ""
+              },
+              {
+                "type": "positional"
+              }
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "hasIssues": [
+        {
+          "path": "packages[0].version"
+        },
+        {
+          "path": "packages[1].runtimeArguments[0].name"
+        },
+        {
+          "path": "packages[1].runtimeArguments[1].type",
+          "reference": "invalid-argument-type"
+        },
+        {
+          "path": "packages[1].runtimeArguments[2]",
+          "reference": "positional-argument-value-or-hint-required"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_InvalidSchema_Error",
+  "cases": [
+    {
+      "name": "unknown schema version",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-01-27/server.schema.json",
+        "name": "com.example.test/server",
+        "description": "Test server",
+        "repository": {
+          "url": "https://github.com/example/server",
+          "source": "github"
+        },
+        "version": "1.0.0"
+      },
+      "valid": false,
+      "hasIssues": [
+        {
+          "path": "schema",
+          "severity": "error",
+          "messageContains": "not available",
+          "reference": "schema-version-not-available"
+        }
+      ]
+    }
+  ]
+}

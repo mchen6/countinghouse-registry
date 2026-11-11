@@ -1,0 +1,583 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate_RegistryTypesAndUrls",
+  "cases": [
+    {
+      "name": "valid_npm",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_npm",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "npm",
+            "identifier": "airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_pypi",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-pypi",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "pypi",
+            "registryBaseUrl": "https://pypi.org",
+            "identifier": "time-mcp-pypi",
+            "version": "1.0.1",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_pypi",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-pypi",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "pypi",
+            "identifier": "time-mcp-pypi",
+            "version": "1.0.1",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_oci",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "oci",
+            "identifier": "domdomegg/airtable-mcp-server:1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_nuget",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "nuget",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+            "identifier": "TimeMcpServer",
+            "version": "1.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_nuget",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "nuget",
+            "identifier": "TimeMcpServer",
+            "version": "1.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_mcpb_github",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/domdomegg/airtable-mcp-server/releases/download/v1.7.2/airtable-mcp-server.mcpb",
+            "fileSha256": "fe333e598595000ae021bd27117db32ec69af6987f507ba7a63c90638ff633ce",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "valid_mcpb_gitlab",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.gitlab.fforster/gitlab-mcp",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://gitlab.com/fforster/gitlab-mcp/-/releases/v1.31.0/downloads/gitlab-mcp_1.31.0_Linux_x86_64.tar.gz",
+            "fileSha256": "abc123ef4567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": true,
+      "note": "upstream also checks package ownership over the network; not ported (spec 7.5)"
+    },
+    {
+      "name": "invalid_mcpb_no_hash",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "mcpb",
+            "identifier": "https://github.com/domdomegg/airtable-mcp-server/releases/download/v1.7.2/airtable-mcp-server.mcpb",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_maven",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "maven",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_cargo",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-pypi",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "cargo",
+            "registryBaseUrl": "https://pypi.org",
+            "identifier": "time-mcp-pypi",
+            "version": "1.0.1",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_gem",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "gem",
+            "identifier": "domdomegg/airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_unknown",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "unknown",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+            "identifier": "TimeMcpServer",
+            "version": "1.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_blank",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "",
+            "registryBaseUrl": "https://api.nuget.org/v3/index.json",
+            "identifier": "TimeMcpServer",
+            "version": "1.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_docker",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "docker",
+            "identifier": "domdomegg/airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_github",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "github",
+            "registryBaseUrl": "https://github.com",
+            "identifier": "https://github.com/domdomegg/airtable-mcp-server/releases/download/v1.7.2/airtable-mcp-server.mcpb",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_mix_1",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/time-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "nuget",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "TimeMcpServer",
+            "version": "1.0.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_mix_2",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "oci",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "domdomegg/airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid_mix_3",
+      "opts": {
+        "registry": true
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "io.github.domdomegg/airtable-mcp-server",
+        "description": "A test server",
+        "repository": {
+          "url": "https://github.com/owner/repo",
+          "source": "github",
+          "id": "owner/repo"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "https://registry.npmjs.org",
+            "registryBaseUrl": "https://registry.npmjs.org",
+            "identifier": "airtable-mcp-server",
+            "version": "1.7.2",
+            "transport": {
+              "type": "stdio"
+            }
+          }
+        ]
+      },
+      "valid": false
+    }
+  ]
+}

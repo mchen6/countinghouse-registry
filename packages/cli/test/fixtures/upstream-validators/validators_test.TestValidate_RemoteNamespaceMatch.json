@@ -1,0 +1,208 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validators_test.go#TestValidate_RemoteNamespaceMatch",
+  "cases": [
+    {
+      "name": "valid match - example.com domain",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/mcp"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "valid match - subdomain mcp.example.com",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.example.com/endpoint"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "valid match - api subdomain",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/api-server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.example.com/mcp"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "valid - different domain",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test-server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://google.com/mcp"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "invalid - not HTTPS",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.microsoft/server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "http://api.github.com/endpoint"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL: http://api.github.com/endpoint",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "invalid URL format",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "not-a-valid-url"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL",
+      "references": [
+        "invalid-remote-url"
+      ]
+    },
+    {
+      "name": "empty remotes array",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/test",
+        "description": "",
+        "version": ""
+      },
+      "valid": true
+    },
+    {
+      "name": "multiple valid remotes - different subdomains",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://api.example.com/sse"
+          },
+          {
+            "type": "streamable-http",
+            "url": "https://mcp.example.com/websocket"
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "one valid, one invalid remote",
+      "opts": {
+        "schema": "version",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example/server",
+        "description": "",
+        "version": "",
+        "remotes": [
+          {
+            "type": "streamable-http",
+            "url": "https://example.com/sse"
+          },
+          {
+            "type": "streamable-http",
+            "url": "http://example.com/sse"
+          }
+        ]
+      },
+      "valid": false,
+      "firstError": "invalid remote URL: http://example.com/sse",
+      "references": [
+        "invalid-remote-url"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:docs/reference/server-json/generic-server-json.md#Server in a Monorepo with Subfolder",
+  "document": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.modelcontextprotocol/everything",
+    "description": "MCP server that exercises all the features of the MCP protocol",
+    "title": "Everything",
+    "repository": {
+      "url": "https://github.com/modelcontextprotocol/servers",
+      "source": "github",
+      "subfolder": "src/everything"
+    },
+    "version": "0.6.2",
+    "packages": [
+      {
+        "registryType": "npm",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "identifier": "@modelcontextprotocol/everything",
+        "version": "0.6.2",
+        "transport": {
+          "type": "stdio"
+        }
+      }
+    ],
+    "_meta": {
+      "io.modelcontextprotocol.registry/publisher-provided": {
+        "tool": "npm-publisher",
+        "version": "1.0.1",
+        "build_info": {
+          "timestamp": "2023-12-01T10:30:00Z"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "source": "modelcontextprotocol/registry@7e8fa024:internal/validators/validation_detailed_test.go#TestValidateServerJSON_RefResolution",
+  "cases": [
+    {
+      "name": "ref resolution",
+      "opts": {
+        "schema": "full",
+        "semantic": true,
+        "nonCurrentSchema": "warn"
+      },
+      "input": {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+        "name": "com.example.test/invalid-server",
+        "description": "Test server with validation errors",
+        "repository": {
+          "source": "github"
+        },
+        "version": "1.0.0",
+        "packages": [
+          {
+            "registryType": "oci",
+            "registryBaseUrl": "https://docker.io",
+            "identifier": "test-package",
+            "version": "1.0.0",
+            "transport": {
+              "type": "sse",
+              "url": "https://example.com"
+            },
+            "packageArguments": [
+              {
+                "format": "invalid-format",
+                "type": "named",
+                "name": "test-arg"
+              }
+            ]
+          }
+        ]
+      },
+      "valid": false,
+      "hasIssues": [
+        {
+          "path": "repository.url"
+        },
+        {
+          "path": "packages[0].packageArguments[0].format"
+        }
+      ],
+      "schemaIssuesAt": [
+        {
+          "path": "repository.url",
+          "reference": "#/definitions/Repository/properties/url/format from: [#/definitions/ServerDetail]/properties/repository/[#/definitions/Repository]/properties/url/format"
+        },
+        {
+          "path": "packages[0].packageArguments[0].format",
+          "referenceContains": [
+            "#/definitions/Input/properties/format/enum",
+            "[#/definitions/InputWithVariables]",
+            "[#/definitions/Input]"
+          ]
+        }
+      ],
+      "minSchemaIssues": 1,
+      "schemaReferencesResolved": true
+    }
+  ]
+}
