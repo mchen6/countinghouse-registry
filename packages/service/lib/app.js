@@ -3,10 +3,13 @@
 // both /v0.1 and /v0 (spec section 4.1: mcp-publisher only speaks /v0).
 const express = require('express');
 const pkg = require('../package.json');
-const {sendJson, problem} = require('./http/problem');
+const {sendJson, problem, handle} = require('./http/problem');
 const {readCors} = require('./http/cors');
 const {serversRouter} = require('./read/servers');
 const {toServerResponse} = require('./read/response');
+const {mirrorState} = require('./mirror/sync');
+
+const X = '/x/io.github.mchen6/countinghouse-registry';
 
 function defaultVersionInfo() {
   return {
@@ -25,7 +28,7 @@ async function storeOk(store) {
   }
 }
 
-function createApp({store, config, log, mirror = null, versionInfo = defaultVersionInfo()}) {
+function createApp({store, config, log, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
@@ -38,6 +41,9 @@ function createApp({store, config, log, mirror = null, versionInfo = defaultVers
   read.use(serversRouter({store, log, view}));
   read.get('/ping', (req, res) => sendJson(res, 200, {pong: true}));
   read.get('/version', (req, res) => sendJson(res, 200, versionInfo));
+  read.get(`${X}/mirror`, handle(log, 'Failed to read the mirror state', async (req, res) => {
+    sendJson(res, 200, await mirrorState(store, now()));
+  }));
   read.get('/health', async (req, res) => {
     if (await storeOk(store)) sendJson(res, 200, {status: 'ok'});
     else sendJson(res, 503, {status: 'error'});
@@ -46,9 +52,9 @@ function createApp({store, config, log, mirror = null, versionInfo = defaultVers
   for (const prefix of ['/v0.1', '/v0']) app.use(prefix, read);
 
   app.get('/healthz', async (req, res) => {
-    const mirrorState = mirror ? await mirror.state().catch(() => null) : null;
-    if (await storeOk(store)) sendJson(res, 200, {ok: true, store: 'ok', mirror: mirrorState});
-    else sendJson(res, 503, {ok: false, store: 'error', mirror: mirrorState});
+    const mirror = await mirrorState(store, now()).catch(() => null);
+    if (await storeOk(store)) sendJson(res, 200, {ok: true, store: 'ok', mirror});
+    else sendJson(res, 503, {ok: false, store: 'error', mirror});
   });
 
   app.use((req, res) => problem(res, 404, 'Endpoint not found.'));
