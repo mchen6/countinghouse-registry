@@ -37,13 +37,22 @@ const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const invalid = (res, errors) => problem(res, 422, 'validation failed', {errors});
 
 // For an operator read of a served row: {conflict, upstream, alsoAt, differsAt}.
-// alsoAt and differsAt are the lower-precedence upstreams whose copy is
-// identical (the 7.2 comparison) or differs from the one served.
+// For a mirrored row, alsoAt and differsAt are the lower-precedence upstreams
+// whose copy is identical (the 7.2 comparison) or differs from the one served;
+// for a local row, every upstream with a visible copy, and no `upstream`.
 async function operatorDetail(store, row) {
   const detail = {};
   const [c] = await store.read('SELECT 1 AS x FROM conflicts WHERE name = ? AND version = ?', [row.name, row.version]);
   if (c) detail.conflict = true;
-  if (row.source === 'mirror' && row.upstream) {
+  if (row.source === 'local') {
+    // Nothing is served from an upstream; every visible copy agrees or differs.
+    const copies = await store.read(`SELECT s.upstream, s.server FROM record_sources s JOIN mirror_upstreams u ON u.name = s.upstream
+      WHERE s.name = ? AND s.version = ? AND s.hidden_reason IS NULL ORDER BY u.position`, [row.name, row.version]);
+    const local = serverHash(row.server);
+    detail.alsoAt = [];
+    detail.differsAt = [];
+    for (const x of copies) (serverHash(x.server) === local ? detail.alsoAt : detail.differsAt).push(x.upstream);
+  } else if (row.upstream) {
     const copies = await store.read(`SELECT s.upstream, s.server, u.position FROM record_sources s JOIN mirror_upstreams u ON u.name = s.upstream
       WHERE s.name = ? AND s.version = ? AND s.hidden_reason IS NULL ORDER BY u.position`, [row.name, row.version]);
     const serving = copies.find((x) => x.upstream === row.upstream);
@@ -100,7 +109,8 @@ function operatorRouter({store, config, log, auth, now, mirror}) {
     const outcome = await store.write(async (tx) => {
       const rec = await tx.get('SELECT hidden_reason, official FROM records WHERE name = ? AND version = ?', [name, version]);
       if (!rec) return 'missing';
-      // The operator accepts a deletion, never one in advance (7.3).
+      // The operator accepts a version that is deleted or gone, never one in
+      // advance (7.3).
       if (rec.hidden_reason === null && JSON.parse(rec.official).status !== 'deleted') return 'live';
       await tx.run(`INSERT INTO overrides (name, version, keep_deleted, by_key, at) VALUES (?, ?, 1, ?, ?)
         ON CONFLICT (name, version) DO UPDATE SET keep_deleted = 1, by_key = excluded.by_key, at = excluded.at`, [name, version, req.actor.fp, at]);
@@ -109,7 +119,7 @@ function operatorRouter({store, config, log, auth, now, mirror}) {
       return 'set';
     });
     if (outcome === 'missing') return problem(res, 404, 'Server version not found');
-    if (outcome === 'live') return problem(res, 409, `${subjectOf(req)} is not deleted upstream or gone from it; keepDeleted applies only to such versions`);
+    if (outcome === 'live') return problem(res, 409, `${subjectOf(req)} is neither deleted nor gone upstream; keepDeleted applies only to a version that is deleted or gone`);
     logged(req, 'override.set', subjectOf(req));
     return sendJson(res, 200, {name, version, keepDeleted: true, by: req.actor.fp, at});
   }));

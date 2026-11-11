@@ -306,7 +306,8 @@ registry of local records only **(implementer's call)**.
   identical: `server` objects equal as canonical JSON with `_meta` reduced
   to `publisher-provided`, the 7.2 rule); a lower-precedence copy that
   differs is an operator-only conflict, listed as `differsAt` on the same
-  reads. The named per-upstream mirror state is
+  reads. A local record's operator read lists every upstream with a visible
+  copy under `alsoAt` or `differsAt`, with no `upstream`. The named per-upstream mirror state is
   `GET /v0.1/x/<ns>/mirror/upstreams` (operator).
 - **Config changes, applied at startup.** A changed order rebuilds every
   served mirrored record. An upstream removed from the list loses its copies
@@ -339,7 +340,8 @@ pushed there; the operator docs say so.
   - identical: the local record's `origin` becomes `local+upstream` and
     `mirroredAt` is set; upstream status changes apply as overlays (7.3);
   - different: the local record stays as served; a **conflict** is recorded
-    (name, version, both hashes, first seen), shown on
+    (name, version, both hashes, first seen) once per differing pair (a new
+    upstream variant reopens an acknowledged conflict), shown on
     `GET /v0.1/x/<ns>/conflicts` (operator) and as `conflict: true` under our
     key on operator reads, and logged once at warn level.
 - A conflict never stops serving: an entry already enabled keeps being
@@ -364,7 +366,9 @@ pushed there; the operator docs say so.
   recorded with key fingerprint and time; `DELETE` removes it) means "the
   operator accepts this entry". It **never changes public responses** (the
   record stays hidden, status as upstream); it silences the notice on
-  enabled instances and permits new enables of that version.
+  enabled instances and permits new enables of that version. It is accepted
+  only for a version that is deleted or gone, never one in advance (409
+  otherwise).
 
 ### 7.4 `isLatest` for claimed namespaces
 

@@ -7,8 +7,9 @@
 //     message and statusChangedAt (7.3); our publishedAt and updatedAt stay; a
 //     conflict recorded earlier is closed;
 //   - different: the local record stays as served (origin local, no mirroredAt),
-//     and a conflict (name, version, both hashes, first seen) is recorded once;
-//     onConflict hears of a new one.
+//     and a conflict (name, version, both hashes, first seen) is recorded once
+//     per differing pair; a new pair reopens an acknowledged one; onConflict
+//     hears of each new pair.
 const {sha256Canonical} = require('countinghouse-registry-cli/lib/canonical-json');
 const {reduceMeta} = require('countinghouse-registry-cli/lib/validate');
 
@@ -40,9 +41,17 @@ async function compareWithLocal(tx, copy, {nowIso, onConflict = () => {}} = {}) 
   const localSha = serverHash(local.server);
   const upstreamSha = serverHash(copy.server);
   if (localSha !== upstreamSha) {
-    const inserted = await tx.get(`INSERT INTO conflicts (name, version, local_sha, upstream_sha, first_seen) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT (name, version) DO NOTHING RETURNING name`, [copy.name, copy.version, localSha, upstreamSha, nowIso]);
-    if (inserted) onConflict({name: copy.name, version: copy.version, localSha, upstreamSha});
+    // Recorded once per differing pair. An acknowledgement covers the pair it was
+    // made against, so a new variant (of either side) reopens the conflict:
+    // both hashes replaced, the acknowledgement cleared, first_seen kept.
+    const prev = await tx.get('SELECT local_sha, upstream_sha FROM conflicts WHERE name = ? AND version = ?', [copy.name, copy.version]);
+    if (!prev || prev.local_sha !== localSha || prev.upstream_sha !== upstreamSha) {
+      await tx.run(`INSERT INTO conflicts (name, version, local_sha, upstream_sha, first_seen) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (name, version) DO UPDATE SET local_sha = excluded.local_sha, upstream_sha = excluded.upstream_sha, ack_by = NULL, ack_at = NULL`,
+      [copy.name, copy.version, localSha, upstreamSha, nowIso]);
+      await touchEnables(tx, copy.name, copy.version);
+      onConflict({name: copy.name, version: copy.version, localSha, upstreamSha});
+    }
     // No longer confirmed by upstream.
     if (local.origin === 'local+upstream' || local.mirrored_at !== null) {
       await tx.run("UPDATE records SET origin = 'local', mirrored_at = NULL, changed_at = ? WHERE name = ? AND version = ? AND source = 'local'", [nowIso, copy.name, copy.version]);

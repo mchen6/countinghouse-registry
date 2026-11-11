@@ -142,6 +142,59 @@ describe('operator endpoints', () => {
     assert.strictEqual((await t.store.read('SELECT seq FROM enables'))[0].seq, e.seq);
   });
 
+  it('a new upstream variant reopens an acknowledged conflict', async () => {
+    const name = 'com.example/srv';
+    const doc = server(name, '1.0.0');
+    await insertRecord(t.store, {source: 'local', origin: 'local', name, version: '1.0.0', server: doc});
+    await t.store.write((tx) => tx.run(`INSERT INTO enables (instance, name, version, state, remote_index, seq, updated_at, by_key)
+      VALUES ('gw-1', ?, '1.0.0', 'validated', 0, 0, '2026-11-09T00:00:00.000Z', 'ed25519:x')`, [name]));
+    const official = JSON.stringify({status: 'active', statusChangedAt: '2026-11-01T00:00:00Z', publishedAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', isLatest: true});
+    const heard = [];
+    const pass = (description, nowIso) => t.store.write((tx) => compareWithLocal(tx, {name, version: '1.0.0', server: JSON.stringify({...doc, description}),
+      official, mirrored_at: nowIso}, {nowIso, onConflict: (c) => heard.push(c.upstreamSha)}));
+    assert.strictEqual(await pass('variant b', '2026-11-10T01:00:00.000Z'), 'conflict');
+    const token = await operator();
+    await call('POST', `${X}/conflicts/${encodeURIComponent(name)}/versions/1.0.0/acknowledge`, token);
+    const seqAfterAck = (await t.store.read('SELECT seq FROM enables'))[0].seq;
+    // The same pair again: still acknowledged, nothing heard.
+    await pass('variant b', '2026-11-10T02:00:00.000Z');
+    assert.strictEqual(heard.length, 1);
+    assert.strictEqual(await t.store.write((tx) => openConflict(tx, name, '1.0.0')), false);
+    // A third variant: the acknowledgement covered the pair it was made against.
+    await pass('variant c', '2026-11-10T03:00:00.000Z');
+    assert.strictEqual(heard.length, 2, 'onConflict fires again');
+    assert.notStrictEqual(heard[1], heard[0]);
+    assert.strictEqual(await t.store.write((tx) => openConflict(tx, name, '1.0.0')), true);
+    const [c] = (await call('GET', `${X}/conflicts`, token)).body.conflicts;
+    assert.strictEqual(c.upstreamSha256, heard[1]);
+    assert.strictEqual(c.acknowledgedBy, null);
+    assert.strictEqual(c.acknowledgedAt, null);
+    assert.strictEqual(c.firstSeen, '2026-11-10T01:00:00.000Z', 'first seen is kept');
+    assert.ok((await t.store.read('SELECT seq FROM enables'))[0].seq > seqAfterAck, 'the instance sees it on its next poll');
+  });
+
+  it('operator reads of a local record list the upstreams whose copy agrees or differs', async () => {
+    const name = 'com.example/claimed';
+    const doc = server(name, '1.0.0');
+    const official = JSON.stringify({status: 'active', statusChangedAt: '2026-11-01T00:00:00Z', publishedAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', isLatest: true});
+    await insertRecord(t.store, {source: 'local', origin: 'local+upstream', name, version: '1.0.0', server: doc});
+    await t.store.write(async (tx) => {
+      const copy = (u, sv, hidden = null) => tx.run('INSERT INTO record_sources (upstream, name, version, server, official, mirrored_at, hidden_reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [u, name, '1.0.0', JSON.stringify(sv), official, '2026-11-10T00:00:00.000Z', hidden]);
+      await copy('official', doc);
+      await copy('mine', {...doc, description: 'differs'});
+      await copy('third', doc, 'gone-upstream');
+    });
+    const path = `/v0.1/servers/${encodeURIComponent(name)}/versions/1.0.0`;
+    const op = (await call('GET', path, await operator())).body._meta[OURS];
+    assert.strictEqual(op.upstream, undefined, 'nothing is served from an upstream');
+    assert.deepStrictEqual(op.alsoAt, ['official']);
+    assert.deepStrictEqual(op.differsAt, ['mine']);
+    const pub = (await call('GET', path)).body._meta[OURS];
+    assert.strictEqual(pub.alsoAt, undefined);
+    assert.strictEqual(pub.differsAt, undefined);
+  });
+
   it('reads vary on Authorization, and an operator read is never stored by a shared cache', async () => {
     await insertRecord(t.store, {name: 'io.example/one', version: '1.0.0'});
     const pub = await call('GET', '/v0.1/servers');
@@ -151,11 +204,11 @@ describe('operator endpoints', () => {
     assert.strictEqual(op.headers['cache-control'], 'private, no-store');
   });
 
-  it('a keepDeleted override is only for a version deleted upstream or gone from it', async () => {
+  it('a keepDeleted override is only for a version that is deleted or gone, never one in advance', async () => {
     await insertRecord(t.store, {name: 'io.example/live', version: '1.0.0'});
     const res = await call('POST', `${X}/overrides/${encodeURIComponent('io.example/live')}/versions/1.0.0`, await operator(), {keepDeleted: true});
     assert.strictEqual(res.status, 409);
-    assert.strictEqual(res.body.detail, 'io.example/live@1.0.0 is not deleted upstream or gone from it; keepDeleted applies only to such versions');
+    assert.strictEqual(res.body.detail, 'io.example/live@1.0.0 is neither deleted nor gone upstream; keepDeleted applies only to a version that is deleted or gone');
     assert.deepStrictEqual(await auditRows(), []);
   });
 

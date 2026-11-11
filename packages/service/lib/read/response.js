@@ -18,8 +18,8 @@ function toServerResponse(row, view = {}) {
   if (view.hosting && view.publicHosting !== 'none') ours.hosting = view.hosting;
   // Operator reads only (6.8, 7.2): the attribution and the conflict flag.
   if (view.operator) {
-    if (view.upstream) {
-      ours.upstream = view.upstream;
+    if (view.upstream) ours.upstream = view.upstream;
+    if (view.alsoAt) {
       ours.alsoAt = view.alsoAt;
       ours.differsAt = view.differsAt;
     }
