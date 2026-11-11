@@ -68,6 +68,13 @@ describe('mirror client', () => {
     assert.deepStrictEqual(sleeps, [2500, 5000, 10000]);
   });
 
+  it('never sleeps less than 250 ms between attempts, whatever the jitter draws', async () => {
+    const f = fake([response(503, ''), response(200, PAGE)]);
+    const {c, sleeps} = client(f, {random: () => 0});
+    await c.page({});
+    assert.deepStrictEqual(sleeps, [250]);
+  });
+
   it('retries a network error', async () => {
     const f = fake([Object.assign(new Error('socket hang up'), {code: 'ECONNRESET'}), response(200, PAGE)]);
     const {c, sleeps} = client(f);

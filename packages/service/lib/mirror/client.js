@@ -8,6 +8,7 @@
 
 const OFFICIAL = 'io.modelcontextprotocol.registry/official';
 const BASE_DELAY_MS = 5000;
+const MIN_DELAY_MS = 250; // a jitter draw near 0 must not become a tight loop
 const FETCH_TIMEOUT_MS = 30000;
 const VERSION_TIMEOUT_MS = 10000;
 
@@ -96,7 +97,8 @@ function createUpstreamClient({baseUrl, fetch = globalThis.fetch, userAgent, sle
         else if (res.status >= 400) throw new UpstreamError('http-4xx', res.status);
         else throw new UpstreamError('bad-page', res.status);
       }
-      const delay = (res && retryAfterMs(res)) ?? Math.floor(random() * Math.min(maxDelayMs, BASE_DELAY_MS * 2 ** attempt));
+      const drawn = (res && retryAfterMs(res)) ?? Math.floor(random() * Math.min(maxDelayMs, BASE_DELAY_MS * 2 ** attempt));
+      const delay = Math.max(MIN_DELAY_MS, drawn);
       if (waited + delay > maxDelayMs) throw err;
       await sleep(delay, signal);
       waited += delay;

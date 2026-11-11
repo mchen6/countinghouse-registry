@@ -13,7 +13,10 @@
 //                shrink guard: if it saw fewer than half the previous pass's
 //                records (an upstream reset) nothing is applied and the pass is
 //                retried the next day; otherwise the staged records are applied
-//                and mirrored records it did not see are hidden as gone-upstream
+//                and mirrored records it did not see are hidden as gone-upstream.
+//                The guard is decided once: the first apply transaction records
+//                it, so a run resumed mid-apply (fewer rows left staged) goes on
+//                applying instead of judging the remainder as a shrink
 // Mirrored records are stored as served, never validated (spec 6.7), and a local
 // record is never overwritten here.
 
@@ -40,7 +43,8 @@ function isOlder(incoming, stored) {
 async function readState(read) {
   const [st] = await read('SELECT * FROM mirror_state WHERE id = 1');
   const kv = Object.fromEntries((await read("SELECT k, v FROM meta_kv WHERE k LIKE 'mirror_%'")).map((r) => [r.k, r.v]));
-  return {...st, runMode: kv.mirror_run_mode || null, successStarted: kv.mirror_success_started || null, pagesDone: kv.mirror_pages_done === '1'};
+  return {...st, runMode: kv.mirror_run_mode || null, successStarted: kv.mirror_success_started || null, pagesDone: kv.mirror_pages_done === '1',
+    guardPassed: (kv.mirror_reconcile_guard || '').startsWith('passed')};
 }
 
 async function setKv(tx, k, v) {
@@ -101,11 +105,11 @@ async function applyPage(store, page, runMode, passNo, nowIso) {
   });
 }
 
-async function finish(store, log, st, runMode, start, passNo, now, atHour) {
+async function finish(store, log, st, runMode, start, passNo, now, atHour, applyBatch) {
   const nowIso = now().toISOString();
   if (runMode === 'reconcile') {
     const [{n}] = await store.read('SELECT count(*) AS n FROM reconcile_stage WHERE pass_no = ?', [passNo]);
-    if (st.last_pass_count && n < st.last_pass_count / 2) {
+    if (!st.guardPassed && st.last_pass_count && n < st.last_pass_count / 2) {
       await store.write(async (tx) => {
         await tx.run('DELETE FROM reconcile_stage WHERE pass_no = ?', [passNo]);
         await tx.run('UPDATE mirror_state SET run_started_at = NULL, cursor = NULL WHERE id = 1');
@@ -117,9 +121,10 @@ async function finish(store, log, st, runMode, start, passNo, now, atHour) {
     }
     // Apply the staged pass in page-sized transactions, then hide what it did not see.
     for (;;) {
-      const batch = await store.read('SELECT name, version, server, official FROM reconcile_stage WHERE pass_no = ? LIMIT 100', [passNo]);
+      const batch = await store.read('SELECT name, version, server, official FROM reconcile_stage WHERE pass_no = ? LIMIT ?', [passNo, applyBatch]);
       if (!batch.length) break;
       await store.write(async (tx) => {
+        if (!st.guardPassed) await setKv(tx, 'mirror_reconcile_guard', `passed:${n}`);
         for (const r of batch) {
           await upsert(tx, r.name, r.version, r.server, r.official, nowIso, passNo);
           await tx.run('DELETE FROM reconcile_stage WHERE pass_no = ? AND name = ? AND version = ?', [passNo, r.name, r.version]);
@@ -134,6 +139,7 @@ async function finish(store, log, st, runMode, start, passNo, now, atHour) {
       const {n} = await tx.get("SELECT count(*) AS n FROM records WHERE source = 'mirror' AND seen_pass = ?", [passNo]);
       await tx.run('UPDATE mirror_state SET last_pass_count = ?, last_reconcile_at = ? WHERE id = 1', [n, nowIso]);
       await setKv(tx, 'mirror_reconcile_retry_at', null);
+      await setKv(tx, 'mirror_reconcile_guard', null);
     }
     await tx.run(`UPDATE mirror_state SET checkpoint = ?, run_started_at = NULL, cursor = NULL, first_sync_done = 1,
                   state = 'idle', last_error = NULL, last_success_at = ? WHERE id = 1`, [start, nowIso]);
@@ -145,7 +151,7 @@ async function finish(store, log, st, runMode, start, passNo, now, atHour) {
   return {state: 'idle'};
 }
 
-async function runSync(store, client, log, {mode = null, now = () => new Date(), signal = null, shouldStop = () => false, atHour = 3} = {}) {
+async function runSync(store, client, log, {mode = null, now = () => new Date(), signal = null, shouldStop = () => false, atHour = 3, applyBatch = 100} = {}) {
   const stopping = () => (signal && signal.aborted) || shouldStop();
   let runMode = mode;
   try {
@@ -159,6 +165,11 @@ async function runSync(store, client, log, {mode = null, now = () => new Date(),
         await tx.run('UPDATE mirror_state SET run_started_at = ?, cursor = NULL, pass_no = ? WHERE id = 1', [start, passNo]);
         await setKv(tx, 'mirror_run_mode', runMode);
         await setKv(tx, 'mirror_pages_done', null);
+        if (runMode === 'reconcile') {
+          // A pass abandoned earlier leaves neither its rows nor its guard decision behind.
+          await tx.run('DELETE FROM reconcile_stage WHERE pass_no <> ?', [passNo]);
+          await setKv(tx, 'mirror_reconcile_guard', null);
+        }
       }
       await tx.run("UPDATE mirror_state SET state = 'syncing' WHERE id = 1");
     });
@@ -183,7 +194,7 @@ async function runSync(store, client, log, {mode = null, now = () => new Date(),
       log.debug('mirror.page', 'applied one page', {page: pageNo, count: page.servers.length, mode: runMode});
       st = {...st, cursor: page.nextCursor, pagesDone: !page.nextCursor};
     }
-    return await finish(store, log, st, runMode, start, passNo, now, atHour);
+    return await finish(store, log, st, runMode, start, passNo, now, atHour, applyBatch);
   } catch (err) {
     return fail(store, log, 'store', {cause: err.code || err.name, mode: runMode});
   }

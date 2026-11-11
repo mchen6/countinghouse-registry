@@ -314,6 +314,60 @@ describe('mirror sync', () => {
     assert.strictEqual(st.first_sync_done, 1);
   });
 
+  it('a crash during the apply loop resumes without tripping the shrink guard', async () => {
+    const eleven = Array.from({length: 11}, (_, i) => rec(`n${String(i).padStart(2, '0')}/x`, '1'));
+    await runSync(store, fakeClient({'': {servers: eleven, nextCursor: null}}), log, {now});
+    clock += 3600000;
+    const seen = eleven.slice(0, 10).map((r) => JSON.parse(JSON.stringify(r)));
+    seen[9].server.description = 'updated';
+    seen[9]._meta[OFFICIAL].updatedAt = '2026-11-09T00:00:00.000000Z';
+    const realWrite = store.write;
+    let applyBatches = 0;
+    store.write = (fn) => {
+      if (fn.toString().includes('DELETE FROM reconcile_stage WHERE pass_no = ? AND name') && ++applyBatches === 3) {
+        return Promise.reject(Object.assign(new Error('killed'), {code: 'KILLED'}));
+      }
+      return realWrite(fn);
+    };
+    const r1 = await runSync(store, fakeClient({'': {servers: seen, nextCursor: null}}), log, {now, mode: 'reconcile', applyBatch: 3});
+    store.write = realWrite;
+    assert.strictEqual(r1.state, 'failed');
+    const [{left}] = await store.read('SELECT count(*) AS left FROM reconcile_stage');
+    assert.strictEqual(left, 4, 'the crash did not land after 6 of 10 applied rows');
+    const again = fakeClient({});
+    const r2 = await runSync(store, again, log, {now, mode: 'reconcile', applyBatch: 3});
+    assert.strictEqual(r2.state, 'idle');
+    assert.strictEqual((await mirrorState(store, now())).lastError, null);
+    assert.strictEqual(again.calls.length, 0);
+    const [n09] = await store.read("SELECT server FROM records WHERE name = 'n09/x'");
+    assert.strictEqual(JSON.parse(n09.server).description, 'updated');
+    const hidden = await store.read('SELECT name FROM records WHERE hidden_reason IS NOT NULL');
+    assert.deepStrictEqual(hidden.map((x) => x.name), ['n10/x']);
+    const [{rest}] = await store.read('SELECT count(*) AS rest FROM reconcile_stage');
+    assert.strictEqual(rest, 0);
+    const kv = await store.read("SELECT k FROM meta_kv WHERE k = 'mirror_reconcile_guard'");
+    assert.deepStrictEqual(kv, []);
+  });
+
+  it('a new reconcile pass drops stage rows abandoned by an earlier pass', async () => {
+    await runSync(store, fakeClient(three()), log, {now});
+    await store.write((tx) => tx.run("INSERT INTO reconcile_stage (pass_no, name, version, server, official) VALUES (99, 'old/x', '1', '{}', '{}')"));
+    clock += 3600000;
+    const r = await runSync(store, fakeClient(three()), log, {now, mode: 'reconcile'});
+    assert.strictEqual(r.state, 'idle');
+    const [{n}] = await store.read('SELECT count(*) AS n FROM reconcile_stage');
+    assert.strictEqual(n, 0);
+  });
+
+  it('a new reconcile pass does not inherit a guard decision left by an earlier pass', async () => {
+    await runSync(store, fakeClient(three()), log, {now});
+    await store.write((tx) => tx.run("INSERT INTO meta_kv (k, v) VALUES ('mirror_reconcile_guard', 'passed:4')"));
+    clock += 3600000;
+    const r = await runSync(store, fakeClient({'': {servers: [rec('a/x', '1')], nextCursor: null}}), log, {now, mode: 'reconcile'});
+    assert.strictEqual(r.state, 'failed');
+    assert.strictEqual((await mirrorState(store, now())).lastError, 'upstream-shrank');
+  });
+
   it('an aborted run keeps its place and says syncing', async () => {
     const ac = new AbortController();
     const client = fakeClient(three());
