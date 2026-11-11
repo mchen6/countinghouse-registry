@@ -67,6 +67,8 @@ describe('service binary', () => {
     assert.deepStrictEqual(body.servers.map((r) => [r.server.name, r.server.description]), [['io.example/one', 'from a'], ['io.example/two', 'from b']]);
     const health = await (await fetch(`http://127.0.0.1:${port}/healthz`)).json();
     assert.deepStrictEqual(health.upstreams.map((u) => [u.name, u.state]), [['a', 'idle'], ['b', 'idle']]);
+    // The token secret was generated beside the store on first start (spec 10.3).
+    assert.strictEqual(fs.statSync(path.join(dir, '.jwt-secret')).mode & 0o777, 0o600);
     assert.match(seenUA, /^countinghouse-registry\/\d+\.\d+\.\d+ \(\+https:\/\/github\.com\/mchen6\/countinghouse-registry\)$/);
     const exited = new Promise((r) => child.on('exit', (code, signal) => r({code, signal})));
     child.kill('SIGTERM');
@@ -93,6 +95,39 @@ describe('service binary', () => {
     clearTimeout(timer);
     assert.strictEqual(code, 2, err);
     assert.match(err, /io\.github\.gone\/srv/);
+  }).timeout(20000);
+
+  // Refusals that come before the store and the port (spec 10.1, 10.3).
+  const refusesToStart = async (name, configBody, env = {}) => {
+    const config = path.join(dir, `${name}.json`);
+    fs.writeFileSync(config, JSON.stringify({store: {path: path.join(dir, `${name}.db`)}, upstreams: [], listen: {host: '127.0.0.1', port: 9719}, ...configBody}));
+    const c = spawn(process.execPath, [BIN, '--config', config], {stdio: ['ignore', 'pipe', 'pipe'], env: {...process.env, ...env}});
+    let err = '';
+    c.stderr.on('data', (d) => { err += d; });
+    const timer = setTimeout(() => c.kill('SIGKILL'), 10000);
+    const code = await new Promise((r) => c.on('exit', r));
+    clearTimeout(timer);
+    assert.strictEqual(code, 2, err);
+    assert.ok(!fs.existsSync(path.join(dir, `${name}.db`)), 'refused before the store is opened');
+    return err;
+  };
+
+  it('refuses to start, exit 2 with the field, when a configured public key does not parse', async () => {
+    const err = await refusesToStart('badkey', {publisherKeys: [{name: 'k', algorithm: 'ed25519', publicKey: Buffer.alloc(31, 1).toString('base64')}]});
+    assert.match(err, /config \/publisherKeys\/0\/publicKey: invalid Ed25519 public key size/);
+  }).timeout(20000);
+
+  it('refuses to start, exit 2, when the secret file is readable by others or the variable is also set, and never prints the secret', async () => {
+    const file = path.join(dir, 'open-secret');
+    fs.writeFileSync(file, 'ab'.repeat(32), {mode: 0o600});
+    fs.chmodSync(file, 0o644);
+    const err = await refusesToStart('opensecret', {secret: {file}});
+    assert.match(err, /open-secret is accessible by group or others \(mode 644\); it must be 0600/);
+    assert.ok(!err.includes('ab'.repeat(32)));
+    fs.chmodSync(file, 0o600);
+    const both = await refusesToStart('bothsecret', {secret: {file}}, {COUNTINGHOUSE_REGISTRY_SECRET: 'cd'.repeat(32)});
+    assert.match(both, /COUNTINGHOUSE_REGISTRY_SECRET and .*open-secret are both present/);
+    assert.ok(!both.includes('ab'.repeat(32)) && !both.includes('cd'.repeat(32)));
   }).timeout(20000);
 
   it('refuses a bad config with exit 2 and the field', async () => {

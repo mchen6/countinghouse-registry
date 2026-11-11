@@ -385,7 +385,10 @@ claimed namespace) runs, in order, collecting all issues:
    unknown property with 422 `unexpected property` before any validator runs:
    probed against the official `POST /v0.1/validate` on 2026-11-11 with an
    unknown top-level field and with a `_meta` key beside `publisher-provided`;
-   both were refused. The same holds for our `POST /v0.1/validate`.
+   both were refused. So other `_meta` keys are refused, as upstream, 422 in
+   huma's shape (`{message: "unexpected property", location: "body.<path>",
+   value}` under `errors`), never dropped. The same holds for our
+   `POST /v0.1/validate`.
 1. **Schema**: `$schema` must be exactly
    `https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json`;
    anything else is 422 naming the current URL. Validation against the
@@ -807,7 +810,8 @@ schema; any error refuses startup with the field path. It holds: listen
 address and port; the upstreams with their intervals and reconciliation
 schedules (6.8); claimed namespaces;
 publisher/operator keys; instance keys; `publicHosting`; the store path; the
-JWT secret file path (or the environment variable, per 10.3).
+JWT secret file path (`secret.file`, by default `.jwt-secret` beside the
+store **(implementer's call)**; or the environment variable, per 10.3).
 
 ### 13.3 Store
 

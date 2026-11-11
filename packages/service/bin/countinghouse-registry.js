@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 // countinghouse-registry --config <path>
+const path = require('path');
 const {parseArgs} = require('util');
-const {loadConfig} = require('../lib/config/load');
+const {loadConfig, ConfigError} = require('../lib/config/load');
+const {loadSecret, SecretError} = require('../lib/auth/secret');
+const {createAuth} = require('../lib/auth/middleware');
 const {openStore} = require('../lib/store');
 const {createApp} = require('../lib/app');
 const {createLogger} = require('../lib/log');
@@ -27,6 +30,18 @@ async function main() {
     process.stderr.write(`${err.message}\n`);
     process.exit(2);
   }
+  // The token secret (spec 10.3: secret.file, by default beside the store, or
+  // COUNTINGHOUSE_REGISTRY_SECRET) and the configured keys, before the store is
+  // opened: either refusing stops the start with exit 2.
+  let auth;
+  try {
+    const secret = loadSecret({file: config.secret.file || path.join(path.dirname(config.store.path), '.jwt-secret')});
+    auth = createAuth({config, secret, log});
+  } catch (err) {
+    if (!(err instanceof SecretError || err instanceof ConfigError)) throw err;
+    process.stderr.write(`countinghouse-registry: ${err.message}\n`);
+    process.exit(2);
+  }
   const store = await openStore(config.store.path);
   // The claimed namespaces (spec 13.3: a removed claim holding local records
   // refuses startup) and then the configured upstream list (order, additions,
@@ -41,7 +56,7 @@ async function main() {
   }
   const {rebuilt} = await applyUpstreams(store, config.upstreams, new Date().toISOString(), {onConflict: conflictLogger(log)});
   if (rebuilt) log.info('mirror.upstreams', 'applied the upstream list', {upstreams: config.upstreams.length});
-  const app = createApp({store, config, log});
+  const app = createApp({store, config, log, auth});
   const userAgent = `countinghouse-registry/${pkg.version} (+https://github.com/mchen6/countinghouse-registry)`;
   const scheduler = createMirror({store, log, config,
     clientFor: (u) => createUpstreamClient({baseUrl: u.url, userAgent, maxDelayMs: u.intervalMinutes * 60000})});

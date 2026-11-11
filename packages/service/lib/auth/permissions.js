@@ -1,6 +1,6 @@
 'use strict';
 // What a token's actor may do (spec section 10). An actor is
-// {kind: 'publisher', sub, keyFp, namespaces, operate} or {kind: 'instance', sub,
+// {kind: 'publisher', sub, namespaces, operate} or {kind: 'instance', sub,
 // instance}; a permission is 'publish:<server name>', 'operate' or
 // 'instance:<id>'. Task 6's real auth and the tests' fakeAuth both decide here.
 const {problem} = require('../http/problem');

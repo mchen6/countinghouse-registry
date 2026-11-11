@@ -63,6 +63,32 @@ Under `/v0.1/x/io.github.mchen6/countinghouse-registry` (and `/v0/x/…`):
   is 422 `{errors}`. A body over 1 MiB, or with more than 500 tools, is 413.
 - `GET …/records/{name}/versions/{version}` (public): the record as stored,
   or 404.
+- `POST …/auth/instance`: a gateway instance's token exchange,
+  `{instance, timestamp, signed_timestamp}`, verified against that
+  instance's configured key. It answers like the domain exchanges below,
+  with `Instance authentication failed`.
+
+## Authentication (spec section 10)
+
+- `POST /v0.1/auth/dns` and `POST /v0.1/auth/http` (and the `/v0` forms,
+  which `mcp-publisher` uses) take upstream's body
+  `{domain, timestamp, signed_timestamp}`. `timestamp` is RFC 3339 and
+  within ±15 s. `signed_timestamp` is the hex signature of the timestamp,
+  made with a key configured for the domain. On success the answer is 200
+  `{registry_token, expires_at}`, as upstream's: an HS256 token valid for 5
+  minutes, with `expires_at` in Unix seconds. A signed timestamp works only
+  once.
+- A refusal is upstream's 401 shape:
+  `{title: "Unauthorized", status: 401, detail: "DNS authentication
+  failed" | "HTTP authentication failed", errors: [{message}]}`. A JSON body
+  that does not decode is 422 `validation failed`. A body that is not JSON
+  is 400 `The request body is not valid JSON`, as on every write route. More than 10 exchange
+  requests a minute from one source is 429 with `Retry-After`.
+- `POST /v0.1/auth/github-at`, `github-oidc`, `oidc` and `none`: 404, naming
+  `dns` and `http`.
+- Write routes take `Authorization: Bearer <registry_token>`. A missing,
+  invalid or expired token is 401 `Invalid or expired Registry JWT token`. A
+  token without the permission is 403.
 
 ## Publishing (spec section 7)
 

@@ -84,6 +84,84 @@ When an upstream copy of one of your versions differs from your record,
 your record is still served. The service logs `publish.conflict` once, at
 warn level, with the first 12 hex digits of both hashes.
 
+## Keys and tokens (spec section 10)
+
+Nobody publishes, changes a status or reaches an operator or instance route
+without a registry token, and tokens come only from keys you list in the
+config:
+
+- **`publisherKeys`**: `{name, algorithm, publicKey, domains, namespaces,
+  operate}`. `algorithm` is `ed25519` or `ecdsa-p384`. `publicKey` is
+  standard base64 of the raw public key: 32 bytes for Ed25519, the 49-byte
+  compressed point for P-384. This is the same value as the `p=` of an
+  `MCPv1` DNS record. `domains` are what `mcp-publisher login dns|http
+  --domain` sends. `namespaces` are the claims this key may publish into.
+  `operate` allows the operator endpoints.
+- **`instances`**: `{instance, algorithm, publicKey}`, one per gateway
+  instance id.
+
+A key that does not parse refuses startup (exit 2) and names the field.
+
+### With mcp-publisher
+
+An unmodified `mcp-publisher` works against this registry:
+
+```
+mcp-publisher login dns --domain example.com --private-key <hex> --registry https://<this registry>
+mcp-publisher publish
+```
+
+`login http` works the same way. The registry verifies the signature
+against the keys configured for that domain. **It never looks up a DNS TXT
+record or fetches a well-known file**, so the domain proves nothing beyond
+"a configured key signed this". What a token may publish comes from the
+key's `namespaces`, never from the domain. The `github-at`, `github-oidc`,
+`oidc` and `none` logins answer 404, naming `dns` and `http`.
+
+A signed timestamp must be within ±15 seconds of the registry's clock, and
+it is accepted once.
+
+### Tokens and revocation
+
+Tokens are HS256 JWTs, valid for **5 minutes**. They are signed with a
+secret of 64 hex characters (32 bytes), from one of two places:
+
+- the file `secret.file`, by default `.jwt-secret` beside the store. It is
+  generated on first start with mode 0600. The service refuses to start if
+  the file is readable by group or others, is a symbolic link or is
+  malformed; or
+- the environment variable `COUNTINGHOUSE_REGISTRY_SECRET`, in the same
+  form. When it is set, no file is generated.
+
+If both the file and the variable are present, the service refuses to
+start. Changing the secret ends every token issued with the old one. The
+secret is never logged.
+
+**Revocation**: remove the key from the config and restart. New
+exchanges with that key stop at once. Tokens it already obtained stay valid
+until they expire, so revocation takes full effect within 5 minutes of the
+restart.
+
+### Behind a reverse proxy
+
+The exchange routes are rate-limited per source address: 10 requests a
+minute, then 429 with `Retry-After`. An IPv6 source counts as its /64.
+Behind a reverse proxy, set `listen.trustProxy: true`. The source is then
+the address your proxy appended to `X-Forwarded-For` (exactly one hop is
+trusted), so an entry the client wrote itself never counts. Use it only
+with exactly one proxy in front, one that appends the client's address
+(nginx `proxy_add_x_forwarded_for`). Without it, every client behind the
+proxy shares the proxy's address. The forwarded address is held only in
+the limiter's memory and is never logged or stored.
+
+### Logs
+
+Exchanges are logged as `auth.exchange` (issued) and
+`auth.exchange.refused` (with a `reason`). Each line names the method, the
+key name or instance id (`gateway`), and the key's fingerprint: upstream's
+format, `<algorithm>:<first 8 base64 characters of the key>`. A line never
+holds a token, a signature, a key or the secret.
+
 ## Health (spec section 13.4)
 
 `GET /healthz` is **internal**: point your orchestrator's or proxy's health
@@ -103,6 +181,10 @@ official registry) and the mirror endpoint above.
   cases from a clone at the new commit:
   `node scripts/port-upstream-fixtures.js <clone>`. The script reads
   upstream's Go test tables and runs no Go code.
+- Before the first release, a person runs the official mcp-publisher
+  release binary against a test instance: `login dns`, `publish`, then read
+  the record back. The automated check replays mcp-publisher's requests as
+  its source sends them; only this run exercises the binary itself.
 
 ## Backups (spec section 13.3)
 

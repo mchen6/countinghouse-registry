@@ -7,6 +7,6 @@ function fakeAuth(actor) {
   return authFor(() => actor);
 }
 
-const publisher = (namespaces, extra = {}) => ({kind: 'publisher', sub: 'test-key', keyFp: 'ed25519:AAAAAAAA', namespaces, operate: false, ...extra});
+const publisher = (namespaces, extra = {}) => ({kind: 'publisher', sub: 'test-key', namespaces, operate: false, ...extra});
 
 module.exports = {fakeAuth, publisher};

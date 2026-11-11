@@ -36,13 +36,19 @@ const BODY_ERRORS = {
   'entity.too.large': [413, 'The request body exceeds 1 MiB']
 };
 
-// `auth` (Task 6, or the tests' fakeAuth) decides the write routes; without one,
-// nothing authenticates.
+// `auth` (lib/auth/middleware.js createAuth, or the tests' fakeAuth) decides the
+// write routes and, when it has a router, serves the token exchanges; without
+// one, nothing authenticates.
 function createApp({store, config, log, auth = denyAll, versionInfo = defaultVersionInfo(), now = () => new Date()}) {
   const app = express();
   app.disable('x-powered-by');
   app.disable('etag');
   app.set('query parser', 'simple');
+  // Behind a reverse proxy, req.ip (the exchange rate limit's key) is the
+  // address that proxy appended to X-Forwarded-For: one hop is trusted, so an
+  // entry the client wrote itself never counts. It is held only in the
+  // limiter's memory (spec 9.6).
+  app.set('trust proxy', config.listen.trustProxy === true ? 1 : false);
 
   const view = async (row) => toServerResponse(row, {publicHosting: config.publicHosting});
 
@@ -63,7 +69,10 @@ function createApp({store, config, log, auth = denyAll, versionInfo = defaultVer
 
   // The write routes first: they send no CORS headers (spec 4.1).
   const write = writeRouter({store, config, log, auth, now, view});
-  for (const prefix of ['/v0.1', '/v0']) app.use(prefix, write, read);
+  for (const prefix of ['/v0.1', '/v0']) {
+    if (auth.router) app.use(prefix, auth.router);
+    app.use(prefix, write, read);
+  }
 
   app.get('/healthz', async (req, res) => {
     // Internal (the operator docs say not to expose it): the aggregate plus the
