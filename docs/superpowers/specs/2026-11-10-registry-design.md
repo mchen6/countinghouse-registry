@@ -1,6 +1,8 @@
 # countinghouse-registry, version 1: design
 
-Status: approved 2026-11-10.
+Status: approved 2026-11-10. Amended 2026-11-10 for several upstreams
+(section 6.8, agreed with the reviewer on the maintainer's direction that an
+operator's own registry is a first-class mirror source).
 Counterpart in the design conversation: the reviewer session, which holds the
 maintainer's decisions. Inputs: `DECISIONS.md`, `README.md`,
 `docs/notes/2026-11-10-registry-brainstorm.md` and the research note
@@ -39,7 +41,8 @@ Goals (version 1):
 
 1. The compatible read API (section 4), unchanged for clients.
 2. The metadata store (section 13.3).
-3. Mirroring of the official catalogue as the core (section 6).
+3. Mirroring of the official catalogue as the core, and of any other
+   API-compatible registry the operator lists, such as their own (section 6).
 4. Operator-only local publishing with `server.json` validation (section 7).
 5. The countinghouse extension fields and records (section 8).
 6. "Enable through countinghouse" for **remote** entries: this repo's half
@@ -51,7 +54,7 @@ Non-goals (version 1): a web UI (a read-only page later); author
 self-publishing (later, with review); enabling **package** entries (npm,
 PyPI, OCI) through countinghouse (waits for countinghouse's out-of-process
 host); hosted-entry billing (waits for countinghouse's P2 usage records);
-migration tooling; pricing in any record; more than one upstream registry.
+migration tooling; pricing in any record.
 
 Anti-goals (a failure even if everything else works):
 
@@ -175,7 +178,7 @@ and "latest", and clients filter on it (`version=latest`).
   it. Per-instance detail is never in public responses (9.6).
 - `conflict`: only on operator-authenticated reads (7.2).
 
-Mirror state is catalogue-wide and is **not** repeated per record: it is
+Mirror state is per upstream and is **not** repeated per record: it is
 served at `GET /v0.1/x/io.github.mchen6/countinghouse-registry/mirror`
 (public) and in `/healthz` (6.5).
 
@@ -183,13 +186,16 @@ served at `GET /v0.1/x/io.github.mchen6/countinghouse-registry/mirror`
 
 ### 6.1 Source and schedule
 
-- One upstream in version 1: the official registry, base URL in config
-  (default `https://registry.modelcontextprotocol.io`), read through
-  `GET /v0.1/servers`.
-- Interval: 1 hour by default, configurable, never below 10 minutes (config
-  refuses lower). An operator-only "sync now" endpoint starts a run at once
-  (refused with 409 while one runs).
-- Requests: one at a time, `limit=100`, `include_deleted=true` always,
+- Config lists the upstreams, in precedence order (6.8). By default there is
+  one, named `official`: the official registry at
+  `https://registry.modelcontextprotocol.io`. Each is read through
+  `GET /v0.1/servers`. Sections 6.2 to 6.7 describe one upstream; every
+  upstream has its own run, cursor, checkpoint, state, pass count and
+  shrink guard.
+- Interval: 1 hour by default, configurable per upstream, never below 10
+  minutes (config refuses lower). An operator-only "sync now" endpoint
+  starts a run at once (refused with 409 while one runs).
+- Requests: one at a time per upstream, `limit=100`, `include_deleted=true` always,
   `Accept-Encoding: gzip`, the decided User-Agent.
 
 ### 6.2 First sync
@@ -224,26 +230,30 @@ status code and the page number, nothing from the response body.
 
 ### 6.5 Mirror state
 
-`{state: "syncing" | "idle" | "failed", lastSuccessAt, lag, lastError,
-upstreamVersion}`: `lag` = seconds since the start of the last successful
+`{upstreams: [{name, state: "syncing" | "idle" | "failed", lastSuccessAt, lag,
+lastError, upstreamVersion}]}`, one entry per configured upstream in
+precedence order: `lag` = seconds since the start of the last successful
 run; `lastError` = a short code (`network`, `http-5xx`, `http-429`,
-`bad-page`); `upstreamVersion` from upstream's `/v0.1/version` when it
-answers (read once per run). Served publicly at the mirror extension
-endpoint and in `/healthz`.
+`bad-page`, `upstream-shrank`, `store`); `upstreamVersion` from upstream's
+`/v0.1/version` when it answers (read once per run). Served publicly at the
+mirror extension endpoint and in `/healthz`. The upstream's name is public
+there (the operator docs say so, so the operator picks a label they are
+content to show); its URL never is **(implementer's call)**.
 
 ### 6.6 Reconciliation
 
 Incremental syncs never see a record that disappears upstream without being
 marked deleted (upstream is a preview; "data resets may occur"). A full
-reconciliation pass runs **weekly** by default (configurable, never more
-often than daily), at a configurable hour, reusing the first-sync pager
+reconciliation pass runs **weekly** by default (configurable per upstream,
+never more often than daily), at a configurable hour, reusing the first-sync pager
 (~2 400 requests at the same pace and User-Agent):
 
-- every mirrored record not seen in the pass becomes `gone-upstream`: hidden
+- every copy from that upstream not seen in the pass becomes `gone-upstream`
+  (a record is hidden only when no upstream still has it, 6.8): hidden
   like a deleted one, with the same operator notice and override rules on
   enabled instances (7.3);
-- if the pass sees fewer than half the records the previous pass saw, it is
-  treated as an upstream reset: nothing is applied, the mirror state becomes
+- if the pass sees fewer than half the records the previous pass of the
+  same upstream saw, it is treated as an upstream reset: nothing is applied, the mirror state becomes
   `failed` with code `upstream-shrank`, and the operator decides (the next
   scheduled or "sync now" pass tries again).
 
@@ -252,7 +262,49 @@ often than daily), at a configurable hour, reusing the first-sync pager
 Mirrored records are stored **as served**: the `server` object byte-for-byte
 as parsed JSON, upstream's official `_meta`, never re-validated (about 12 500
 records upstream use older schema versions). `isLatest` for unclaimed
-namespaces is upstream's, never recomputed.
+namespaces is upstream's whenever one upstream serves every version of the
+name; otherwise 6.8 applies.
+
+### 6.8 Several upstreams
+
+Config: `upstreams: [{name, url, intervalMinutes?, reconcile?}]`, in
+precedence order. `name` is an opaque label chosen by the operator
+(`^[a-z0-9][a-z0-9-]{0,30}$`), unique, and so is `url`; there is no alias for
+a single `upstream` object. An empty list is allowed: no mirroring, a
+registry of local records only **(implementer's call)**.
+
+- **Copies.** Every upstream's copy of a name@version is stored as served
+  (6.7), whatever its precedence, with its own `updatedAt` rule (6.3) and
+  its own `gone-upstream` mark (6.6).
+- **The served record** is a projection of those copies, rebuilt for every
+  name@version a source change touches, inside the same write transaction:
+  the copy of the first upstream in the list that still has it (not
+  `gone-upstream`) is served. A copy with `status: deleted` is still a copy:
+  a deletion at a higher-precedence upstream is served as deleted, not
+  bypassed by a lower one **(implementer's call)**. The record is hidden
+  (`gone-upstream`) only when no upstream has it.
+- **Claimed namespaces beat every upstream** (7.2): a local record is never
+  replaced by any copy; its comparison and `local+upstream` origin follow 7.2
+  against the highest-precedence copy.
+- **`isLatest`**: when every visible mirrored version of a name is served
+  from one upstream, that upstream's values are served as they are;
+  otherwise the registry recomputes it over the name's mirrored versions with
+  the deployed rule of 7.4 (skipping deleted and hidden ones unless all
+  are). Names with a local record follow 7.4.
+- **Attribution is operator-only.** Public reads show `origin: mirror` and
+  nothing about which upstream. Operator-authenticated reads (once the
+  operator routes exist) add under our key `upstream` (the serving
+  upstream's name) and `alsoAt` (lower-precedence upstreams whose copy is
+  identical: `server` objects equal as canonical JSON with `_meta` reduced
+  to `publisher-provided`, the 7.2 rule); a lower-precedence copy that
+  differs is an operator-only conflict, the same shape as 7.2's.
+- **Config changes, applied at startup.** A changed order rebuilds every
+  served mirrored record. An upstream removed from the list loses its copies
+  and state; records only it had become `gone-upstream` (still served as
+  deleted where deleted records are asked for, so downstream syncs learn
+  it), never removed. An upstream whose `url` changed starts again with a
+  first sync **(implementer's call)**; renaming one is a removal plus an
+  addition, so a full sync under the new name (the operator docs say so).
 
 ## 7. Local publishing
 
@@ -736,7 +788,8 @@ page finish, close the store.
 
 One JSON file (path by `--config`), validated at start with an ajv 2020-12
 schema; any error refuses startup with the field path. It holds: listen
-address and port; upstream URL and mirror interval; claimed namespaces;
+address and port; the upstreams with their intervals and reconciliation
+schedules (6.8); claimed namespaces;
 publisher/operator keys; instance keys; `publicHosting`; the store path; the
 JWT secret file path (or the environment variable, per 10.3).
 
@@ -744,8 +797,10 @@ JWT secret file path (or the environment variable, per 10.3).
 
 One SQLite file (sqlite3 `^6`, WAL mode). Tables, at least: records
 (source, name, version, server JSON, official meta, our overlays, `changedAt`,
-last seen by a reconciliation pass), mirror state (cursor, checkpoint, last
-run, last reconciliation count), conflicts, overrides, countinghouse records
+the serving upstream), every upstream's copies (6.8: upstream, name, version,
+server JSON, official meta, last seen by a reconciliation pass, hidden mark),
+mirror state per upstream (cursor, checkpoint, last run, last reconciliation
+count, shrink-guard decision), conflicts, overrides, countinghouse records
 (name, version, JSON, sha256), enables per (instance, name, version) with
 state and timestamps, instance results as **history** (outcome, sha256 or
 reason, time), audit (operator actions: who by fingerprint, what, when).
@@ -835,7 +890,9 @@ copy of the record definition with its origin named.
    4.1).
 7. Mirrored records that vanish upstream without a deleted status are hidden
    after a reconciliation pass (6.6).
-8. Our `_meta` key and the extension endpoints.
+8. Several upstreams may be mirrored, the first in the list winning (6.8);
+   `isLatest` is recomputed only for names served from more than one.
+9. Our `_meta` key and the extension endpoints.
 
 ## 17. Left to the builder, and the implementer's calls
 
@@ -865,6 +922,10 @@ The implementer's calls in this spec (each changeable at review):
     startup on removal with local records (13.3).
 13. Copies from countinghouse at a pinned commit; countinghouse never a
     service dependency (14).
+14. Several upstreams (6.5, 6.8): an upstream's name is public in the
+    mirror state, its URL never; an empty upstream list means no mirroring;
+    a deleted copy at a higher-precedence upstream is served as deleted; a
+    changed `url` restarts that upstream with a first sync.
 
 ## 18. Later (not version 1)
 
