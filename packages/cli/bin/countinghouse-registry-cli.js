@@ -8,7 +8,7 @@ const {CliError} = require('../lib/client');
 const {generate} = require('../lib/commands/generate');
 const {publish} = require('../lib/commands/publish');
 const {register} = require('../lib/commands/register');
-const {operatorCommand, COMMANDS, usageOf} = require('../lib/commands/operator');
+const {operatorCommand, COMMANDS, isCommand, usageOf} = require('../lib/commands/operator');
 
 const SIGNED = '--registry <base URL> --domain <d> --key <path> [--algorithm ed25519|ecdsa-p384]';
 const USAGE = [
@@ -31,6 +31,27 @@ const OPTIONS = {
   remove: {type: 'boolean'}, help: {type: 'boolean', short: 'h'}
 };
 
+// The options each command takes (beyond --help); any other is refused with the
+// command's usage, so a flag is never silently dropped.
+const SIGNED_OPTIONS = ['registry', 'domain', 'key', 'algorithm'];
+const USAGES = {
+  generate: 'usage: countinghouse-registry-cli generate <module dir> --registry <base URL>',
+  publish: `usage: countinghouse-registry-cli publish <module dir> ${SIGNED}`,
+  register: `usage: countinghouse-registry-cli register <dir> ${SIGNED}`
+};
+function optionsOf(command) {
+  if (command === 'generate') return ['registry'];
+  if (command === 'publish' || command === 'register') return SIGNED_OPTIONS;
+  return [...SIGNED_OPTIONS, ...(COMMANDS[command].options || [])];
+}
+const usageFor = (command) => USAGES[command] || usageOf(command);
+
+function onlyTaken(command, values) {
+  const allowed = optionsOf(command);
+  const extra = Object.keys(values).filter((k) => k !== 'help' && !allowed.includes(k));
+  if (extra.length) throw new CliError(1, `${command} does not take ${extra.map((k) => `--${k}`).join(', ')}\n${usageFor(command)}`);
+}
+
 function needs(values, names, command) {
   const missing = names.filter((n) => values[n] === undefined);
   if (missing.length) throw new CliError(1, `${command} needs ${missing.map((n) => `--${n}`).join(', ')}`);
@@ -38,9 +59,10 @@ function needs(values, names, command) {
 
 async function run(command, positionals, values, io) {
   const say = (line) => io.stdout.write(`${line}\n`);
+  if (command === 'generate' || command === 'publish' || command === 'register' || isCommand(command)) onlyTaken(command, values);
   const signed = {registry: values.registry, domain: values.domain, keyFile: values.key, algorithm: values.algorithm, env: io.env, fetch: io.fetch};
   if (command === 'generate') {
-    if (positionals.length !== 1) throw new CliError(1, 'usage: countinghouse-registry-cli generate <module dir> --registry <base URL>');
+    if (positionals.length !== 1) throw new CliError(1, USAGES.generate);
     needs(values, ['registry'], 'generate');
     const out = await generate({dir: positionals[0], registry: values.registry, ...(io.exec ? {exec: io.exec} : {})});
     say(`wrote ${out.recordPath} (sha256 ${out.sha256})`);
@@ -48,7 +70,7 @@ async function run(command, positionals, values, io) {
     return 0;
   }
   if (command === 'publish') {
-    if (positionals.length !== 1) throw new CliError(1, `usage: countinghouse-registry-cli publish <module dir> ${SIGNED}`);
+    if (positionals.length !== 1) throw new CliError(1, USAGES.publish);
     needs(values, ['registry', 'domain'], 'publish');
     const out = await publish({dir: positionals[0], ...signed});
     if (out.record) say(`stored the record for ${out.name}@${out.version} (sha256 ${out.record.sha256}, ${out.record.status === 201 ? 'new' : 'already stored'})`);
@@ -56,10 +78,10 @@ async function run(command, positionals, values, io) {
     return 0;
   }
   if (command === 'register') {
-    if (positionals.length !== 1) throw new CliError(1, `usage: countinghouse-registry-cli register <dir> ${SIGNED}`);
+    if (positionals.length !== 1) throw new CliError(1, USAGES.register);
     needs(values, ['registry', 'domain'], 'register');
     const onResult = (r) => {
-      const what = r.name !== undefined ? ` ${r.name}@${r.version}` : '';
+      const what = r.name === undefined ? '' : r.version === undefined ? ` ${r.name}` : ` ${r.name}@${r.version}`;
       if (r.outcome === 'published') say(`ok   ${r.file}${what}`);
       else say(`${r.outcome === 'skipped' ? 'skip' : 'FAIL'} ${r.file}${what}: ${r.detail}`);
       for (const issue of r.issues) say(`     ${issue}`);
@@ -69,7 +91,7 @@ async function run(command, positionals, values, io) {
     say(`${count('published')} published, ${count('skipped')} skipped, ${count('failed')} failed`);
     return count('failed') === 0 ? 0 : 1;
   }
-  if (COMMANDS[command]) {
+  if (isCommand(command)) {
     needs(values, ['registry', 'domain'], command);
     const body = await operatorCommand(command, positionals, {...signed, remote: values.remote, since: values.since, limit: values.limit, upstream: values.upstream, remove: values.remove});
     say(JSON.stringify(body, null, 2));

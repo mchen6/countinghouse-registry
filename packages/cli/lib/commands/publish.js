@@ -5,7 +5,7 @@
 // pointer is checked against the record on disk before anything is sent.
 const fs = require('fs');
 const path = require('path');
-const {signIn, CliError, X, enc} = require('../client');
+const {signIn, CliError, recordPath} = require('../client');
 const {recordHash, pointerOf} = require('../record');
 
 const hex12 = (h) => (typeof h === 'string' ? h.slice(0, 12) : String(h));
@@ -31,8 +31,8 @@ function loadEntry(serverJsonPath) {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw new CliError(1, `server.json ${serverJsonPath} is not a JSON object`);
   const pointer = pointerOf(doc);
   if (!pointer) return {doc, record: null};
-  const recordPath = path.join(path.dirname(serverJsonPath), 'countinghouse-record.json');
-  const record = readJson(recordPath, 'the record');
+  const recordFile = path.join(path.dirname(serverJsonPath), 'countinghouse-record.json');
+  const record = readJson(recordFile, 'the record');
   const onDisk = recordHash(record);
   if (onDisk !== pointer.sha256) {
     throw new CliError(1, `the record on disk (sha256 ${hex12(onDisk)}…) does not match the pointer in server.json (sha256 ${hex12(pointer.sha256)}…): run generate again`);
@@ -46,7 +46,7 @@ async function publishEntry(session, {doc, record}) {
   let stored = null;
   if (record) {
     if (typeof name !== 'string' || typeof version !== 'string') throw new CliError(1, 'server.json needs a name and a version');
-    const r = await session.call('PUT', `${X}/records/${enc(name)}/versions/${enc(version)}`, record);
+    const r = await session.call('PUT', recordPath(name, version), record);
     stored = {status: r.status, sha256: r.body && r.body.sha256};
   }
   await session.call('POST', '/v0.1/publish', doc);

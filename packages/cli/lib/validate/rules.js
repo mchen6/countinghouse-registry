@@ -286,4 +286,4 @@ const RULE_IDS = ['invalid-server-name', 'repository-url-required', 'repository-
   'streamable-transport-url-required', 'invalid-templated-url', 'unsupported-transport-type', 'remote-transport-url-required', 'invalid-remote-url',
   'unsupported-remote-transport-type'];
 
-module.exports = {semanticIssues, RULE_IDS, goParseURL, trimSpace};
+module.exports = {semanticIssues, RULE_IDS, goParseURL, trimSpace, isValidRepositoryURL};

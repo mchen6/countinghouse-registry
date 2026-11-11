@@ -17,6 +17,15 @@ class CliError extends Error {
   }
 }
 
+// One huma error entry as a line: a string as is, {location, message}, or the
+// entry itself when it carries no message.
+function errorLine(e) {
+  if (typeof e === 'string') return e;
+  const hasMessage = e && typeof e.message === 'string';
+  const text = hasMessage ? e.message : JSON.stringify(e);
+  return e && typeof e.location === 'string' && hasMessage ? `${e.location}: ${text}` : text;
+}
+
 // A refusal from the registry, with its status and the one line describing it.
 class ApiError extends CliError {
   constructor(method, path, status, body) {
@@ -25,7 +34,7 @@ class ApiError extends CliError {
     const detail = typeof b.detail === 'string' ? b.detail : '';
     // The validation problems behind a 422, one line each: huma's errors, or
     // the validator's issues (errors only).
-    const issues = Array.isArray(b.errors) ? b.errors.map((e) => (e.location ? `${e.location}: ${e.message}` : e.message))
+    const issues = Array.isArray(b.errors) ? b.errors.map(errorLine)
       : Array.isArray(b.issues) ? b.issues.filter((i) => i.severity === 'error').map((i) => `${i.path || '(document)'}: ${i.message}`) : [];
     super(1, `${method} ${path}: ${status} ${title}${detail ? `: ${detail}` : ''}${issues.map((l) => `\n  ${l}`).join('')}`);
     this.method = method;
@@ -37,6 +46,9 @@ class ApiError extends CliError {
 }
 
 const enc = encodeURIComponent;
+// name@version in a path, and the record endpoint (8.4), spelled once.
+const entryPath = (name, version) => `${enc(name)}/versions/${enc(version)}`;
+const recordPath = (name, version) => `${X}/records/${entryPath(name, version)}`;
 
 function checkRegistry(registry) {
   if (typeof registry !== 'string' || !/^https?:\/\/[^/]/.test(registry)) throw new CliError(1, `--registry must be an http(s) base URL, not ${JSON.stringify(registry)}`);
@@ -49,13 +61,16 @@ function createClient({registry, fetch: doFetch = globalThis.fetch}) {
     const headers = {accept: 'application/json, application/problem+json'};
     if (token) headers.authorization = `Bearer ${token}`;
     if (body !== undefined) headers['content-type'] = 'application/json';
+    // A failure to send, or to read the whole answer (a reset mid-body), is one
+    // case: exit 2, naming the cause, never the body.
     let res;
+    let text;
     try {
       res = await doFetch(`${base}${path}`, {method, headers, body: body === undefined ? undefined : JSON.stringify(body)});
+      text = await res.text();
     } catch (err) {
-      throw new CliError(2, `${method} ${base}${path}: the registry could not be reached (${(err.cause && err.cause.code) || err.message})`);
+      throw new CliError(2, `${method} ${base}${path}: the registry could not be reached (${(err && err.cause && err.cause.code) || (err && err.message)})`);
     }
-    const text = await res.text();
     let parsed = null;
     try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
     if (res.status >= 400) throw new ApiError(method, path, res.status, parsed);
@@ -110,4 +125,4 @@ async function signIn({registry, domain, keyFile, algorithm, env, fetch}) {
   return {...client, call};
 }
 
-module.exports = {createClient, exchange, signIn, loadPrivateKey, checkRegistry, CliError, ApiError, X, KEY_ENV, enc};
+module.exports = {createClient, exchange, signIn, loadPrivateKey, checkRegistry, CliError, ApiError, X, KEY_ENV, enc, entryPath, recordPath};

@@ -6,7 +6,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
-const {generate} = require('../lib/commands/generate');
+const {generate, repositoryOf} = require('../lib/commands/generate');
 const {validateServerJson, CURRENT_SCHEMA} = require('../lib/validate');
 const {recordHash, validateRecord} = require('../lib/record');
 const {moduleCopy, fakeExec, validateOk, fixtureTools, ECHO_TOOLS} = require('./support/module');
@@ -126,6 +126,43 @@ describe('generate', () => {
     await fails(run({exec: big.exec}), 2, /^countinghouse-validate could not run: ERR_CHILD_PROCESS_STDIO_MAXBUFFER$/);
   });
 
+  it('a child that does not finish in time is told so, by the limit', async () => {
+    m = moduleCopy();
+    const slow = fakeExec({error: Object.assign(new Error('timed out'), {code: null, killed: true, signal: 'SIGKILL'})});
+    await fails(run({exec: slow.exec}), 2, /^countinghouse-validate did not finish within 5 minutes and was stopped$/);
+    assert.strictEqual(slow.calls[0].opts.killSignal, 'SIGKILL');
+  });
+
+  it('accepts npm\'s string shorthand for bin', async () => {
+    m = moduleCopy({pkg: (p) => ({...p, bin: './bin/countinghouse-launch.js'})});
+    const out = await run();
+    assert.strictEqual(readJson(out.serverJsonPath).packages[0].identifier, readJson(path.join(m.dir, 'package.json')).name);
+  });
+
+  describe('repositoryOf', () => {
+    const ok = (repo, url, source = 'github') => assert.deepStrictEqual(repositoryOf(repo), {value: {url, source}}, JSON.stringify(repo));
+    it('accepts the scp form npm documents, http, git+ssh and the shorthands, as https', () => {
+      ok('git@github.com:owner/repo.git', 'https://github.com/owner/repo');
+      ok({type: 'git', url: 'git+ssh://git@github.com/owner/repo.git'}, 'https://github.com/owner/repo');
+      ok('http://github.com/owner/repo', 'https://github.com/owner/repo');
+      ok({url: 'git@gitlab.com:group/sub/repo.git'}, 'https://gitlab.com/group/sub/repo', 'gitlab');
+      ok('github:owner/repo', 'https://github.com/owner/repo');
+      ok('owner/repo', 'https://github.com/owner/repo');
+      ok('https://github.com/owner/repo.git/', 'https://github.com/owner/repo');
+    });
+    it('refuses a deeper path in package.json\'s terms, pointing to directory', () => {
+      for (const url of ['https://github.com/o/r/tree/main/sub', 'https://gitlab.com/g/r/-/tree/main', 'https://gitlab.com/g/r/-/']) {
+        const {problem} = repositoryOf({url});
+        const host = url.includes('gitlab') ? 'gitlab' : 'github';
+        assert.strictEqual(problem, `repository ${url} in package.json must name the repository itself (https://${host}.com/owner/repo); use repository.directory for a subfolder`);
+      }
+    });
+    it('a deeper path fails as a package.json problem, before any server.json is generated', async () => {
+      m = moduleCopy({pkg: (p) => ({...p, repository: {type: 'git', url: 'https://github.com/o/r/tree/main/sub'}})});
+      await fails(run(), 1, /^package\.json in .* needs changes before generate:\n {2}repository .* must name the repository itself/);
+    });
+  });
+
   it('exit 1 for a description over 100 characters; no truncation', async () => {
     m = moduleCopy({pkg: (p) => ({...p, description: 'x'.repeat(101)})});
     await fails(run(), 1, /description is 101 characters; the registry allows 100: shorten it in package\.json/);
@@ -196,6 +233,27 @@ describe('generate', () => {
       stub('lib/mcp/tools-list-for-module.js', 'setInterval(() => {}, 1000);\nexports.toolsListForModule = () => ({tools: [{name: "echo.echo", inputSchema: {}}]});\n');
       const out = await generate({dir: m.dir, registry: REGISTRY});
       assert.strictEqual(readJson(out.recordPath).tools[0].name, 'echo.echo');
+    });
+
+    it('a tool-list module that fails to load is reported as that, not as a missing export', async () => {
+      m = moduleCopy();
+      stub('bin/countinghouse-validate.js', 'console.log(JSON.stringify({ok: true, module: "echo", problems: []}));\n');
+      stub('lib/mcp/tools-list-for-module.js', 'require("a-missing-nested-dependency");\n');
+      await assert.rejects(generate({dir: m.dir, registry: REGISTRY}), (err) => {
+        assert.strictEqual(err.exitCode, 2);
+        assert.match(err.message, /^countinghouse's lib\/mcp\/tools-list-for-module failed to load: Cannot find module 'a-missing-nested-dependency'$/);
+        return true;
+      });
+      stub('lib/mcp/tools-list-for-module.js', 'throw new Error("boom at load");\n');
+      await fails(generate({dir: m.dir, registry: REGISTRY}), 2, /^countinghouse's lib\/mcp\/tools-list-for-module failed to load: boom at load$/);
+    });
+
+    it('a child that ignores SIGTERM and stays open is stopped at the limit', async function () {
+      this.timeout(8000);
+      m = moduleCopy();
+      // Ignores SIGTERM, keeps a handle open, and gives up by itself after 6 s.
+      stub('bin/countinghouse-validate.js', 'process.on("SIGTERM", () => {});\nsetTimeout(() => process.exit(0), 6000);\n');
+      await fails(generate({dir: m.dir, registry: REGISTRY, childTimeoutMs: 300}), 2, /^countinghouse-validate did not finish within 0\.3 seconds and was stopped$/);
     });
 
     it('exit 2 when the installed countinghouse has no toolsListForModule', async () => {

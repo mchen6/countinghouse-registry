@@ -281,15 +281,18 @@ npx countinghouse-registry-cli register <dir> --registry https://<this registry>
 ```
 
 Every `server.json` under `<dir>` (at any depth, not under `node_modules`
-or a dot-directory) is published with one exchange, in path order. A
+or a dot-directory; symlinked files and directories are followed, each real
+directory once) is published with one exchange, in path order. A
 `countinghouse-record.json` beside a `server.json` with a pointer is PUT
 first. A failed file does not stop the others. It prints one line per file
 (`ok   <file> <name>@<version>`; `skip <file> …: already published here`
 when that version is already published here as the same document; or
 `FAIL <file> …: <status> <title>: <detail>` followed by each validation
 issue) and a total, `N published, M skipped, K failed`. Exit 0 when no file
-failed, 1 otherwise; a registry that stops answering ends the run with exit
-2, naming the files not tried. Tokens last 5 minutes, so a long run signs
+failed, 1 otherwise; a registry that stops answering (or drops the connection
+mid-answer) ends the run with exit 2, naming the file it was on as
+interrupted (its record may already be stored: run register again) and the
+files not tried. Tokens last 5 minutes, so a long run signs
 in again when one expires. An empty directory is exit 1 with "no
 server.json found".
 
@@ -307,7 +310,8 @@ above, printing the registry's JSON answer:
 | `sync [--upstream <name>]` | `POST …/mirror/sync` |
 
 A refusal is exit 1 with `METHOD path: status title: detail`. An
-unreachable registry is exit 2.
+unreachable registry is exit 2. Every command refuses an option it does not
+take (exit 1, with its usage) rather than ignoring it.
 
 ## Health (spec section 13.4)
 

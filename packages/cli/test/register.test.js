@@ -6,7 +6,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const {register} = require('../lib/commands/register');
+const {register, findServerJsons} = require('../lib/commands/register');
 const {generate} = require('../lib/commands/generate');
 const {main} = require('../bin/countinghouse-registry-cli');
 const {CURRENT_SCHEMA} = require('../lib/validate');
@@ -130,6 +130,20 @@ describe('register', () => {
     }
   });
 
+  it('a symlinked server.json is published with the record beside the file it points to', async () => {
+    const m = moduleCopy();
+    try {
+      await generate({dir: m.dir, registry: svc.url, exec: validateOk().exec, toolsList: fixtureTools});
+      fs.mkdirSync(path.join(dir, 'echo'));
+      fs.symlinkSync(path.join(m.dir, 'server.json'), path.join(dir, 'echo', 'server.json'));
+      const out = await register(opts());
+      assert.deepStrictEqual(out.results.map((r) => [r.file, r.outcome, r.status, r.detail]), [['echo/server.json', 'published', 200, 'published']]);
+      assert.strictEqual((await svc.get(`/v0.1/x/io.github.mchen6/countinghouse-registry/records/${encodeURIComponent('com.example/echo')}/versions/1.0.0`)).status, 200);
+    } finally {
+      m.remove();
+    }
+  });
+
   it('a token that expires during the run is renewed once and the file still publishes', async () => {
     put('a/server.json', doc('com.example/srv-a'));
     put('b/server.json', doc('com.example/srv-b'));
@@ -155,7 +169,35 @@ describe('register', () => {
     const downFetch = (url, init) => (String(url).endsWith('/auth/dns') ? fetch(url, init) : Promise.reject(Object.assign(new TypeError('fetch failed'), {cause: {code: 'ECONNREFUSED'}})));
     const cli = io();
     assert.strictEqual(await main(['register', dir, '--registry', svc.url, '--domain', svc.domain, '--key', svc.keyFile], {...cli, fetch: downFetch}), 2);
-    assert.match(cli.text(), /could not be reached \(ECONNREFUSED\)[\s\S]*not tried: a\/server\.json, b\/server\.json/);
+    assert.match(cli.text(), /could not be reached \(ECONNREFUSED\)\ninterrupted: a\/server\.json \(it may be partly stored: run register again\)\nnot tried: b\/server\.json\n$/);
+  });
+
+  it('a connection reset while the second file\'s answer is read ends the run with exit 2: that file interrupted, the rest not tried', async () => {
+    put('a/server.json', doc('com.example/srv-a'));
+    put('b/server.json', doc('com.example/srv-b'));
+    put('c/server.json', doc('com.example/srv-c'));
+    const resetFetch = async (url, init) => {
+      const res = await fetch(url, init);
+      if (String(url).endsWith('/v0.1/publish') && init.body.includes('srv-b')) {
+        return {status: res.status, text: () => Promise.reject(Object.assign(new TypeError('terminated'), {cause: {code: 'ECONNRESET'}}))};
+      }
+      return res;
+    };
+    const cli = io();
+    assert.strictEqual(await main(['register', dir, '--registry', svc.url, '--domain', svc.domain, '--key', svc.keyFile], {...cli, fetch: resetFetch}), 2);
+    const text = cli.text();
+    assert.match(text, /^ok   a\/server\.json com\.example\/srv-a@1\.0\.0\n/);
+    assert.match(text, /could not be reached \(ECONNRESET\)\ninterrupted: b\/server\.json \(it may be partly stored: run register again\)\nnot tried: c\/server\.json\n$/);
+    assert.ok(!text.includes('unexpected error'), text);
+  });
+
+  it('a file with a name and no version prints the name alone', async () => {
+    const {version, ...noVersion} = doc('com.example/srv-a');
+    put('a/server.json', noVersion);
+    const cli = io();
+    assert.strictEqual(await main(['register', dir, '--registry', svc.url, '--domain', svc.domain, '--key', svc.keyFile], cli), 1);
+    assert.match(cli.text(), /^FAIL a\/server\.json com\.example\/srv-a: /m);
+    assert.ok(!cli.text().includes('@undefined'), cli.text());
   });
 
   it('a 409 whose comparison read fails says so, rather than calling the document different', async () => {
@@ -176,5 +218,54 @@ describe('register', () => {
     const cli = io();
     assert.strictEqual(await main(['register', dir, '--registry', svc.url, '--domain', svc.domain, '--key', svc.keyFile], cli), 1);
     assert.match(cli.text(), /no server\.json found/);
+  });
+});
+
+describe('findServerJsons', () => {
+  let dir;
+  let outside;
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chr-find-'));
+    outside = fs.mkdtempSync(path.join(os.tmpdir(), 'chr-outside-'));
+  });
+  afterEach(() => { for (const d of [dir, outside]) fs.rmSync(d, {recursive: true, force: true}); });
+
+  it('follows a symlinked server.json and a symlinked directory, once each, without looping', () => {
+    fs.mkdirSync(path.join(outside, 'srv'), {recursive: true});
+    fs.writeFileSync(path.join(outside, 'srv', 'server.json'), '{}');
+    fs.writeFileSync(path.join(outside, 'single.json'), '{}');
+    fs.mkdirSync(path.join(dir, 'file-link'));
+    fs.symlinkSync(path.join(outside, 'single.json'), path.join(dir, 'file-link', 'server.json'));
+    fs.symlinkSync(path.join(outside, 'srv'), path.join(dir, 'dir-link'));
+    fs.symlinkSync(dir, path.join(dir, 'loop'));
+    fs.symlinkSync(path.join(outside, 'missing'), path.join(dir, 'dangling'));
+    assert.deepStrictEqual(findServerJsons(dir), ['dir-link/server.json', 'file-link/server.json']);
+  });
+
+  it('a symlink into node_modules or a dot-directory is not walked', () => {
+    for (const hidden of ['node_modules/dep', '.cache/dep']) {
+      fs.mkdirSync(path.join(outside, hidden), {recursive: true});
+      fs.writeFileSync(path.join(outside, hidden, 'server.json'), '{}');
+    }
+    fs.symlinkSync(path.join(outside, 'node_modules'), path.join(dir, 'vendor'));
+    fs.symlinkSync(path.join(outside, 'node_modules', 'dep'), path.join(dir, 'dep'));
+    fs.symlinkSync(path.join(outside, '.cache'), path.join(dir, 'cache'));
+    fs.mkdirSync(path.join(dir, 'real'));
+    fs.writeFileSync(path.join(dir, 'real', 'server.json'), '{}');
+    assert.deepStrictEqual(findServerJsons(dir), ['real/server.json']);
+  });
+
+  it('a directory reached both directly and through a link is reported under its real path', () => {
+    fs.mkdirSync(path.join(dir, 'z'));
+    fs.writeFileSync(path.join(dir, 'z', 'server.json'), '{}');
+    fs.symlinkSync(path.join(dir, 'z'), path.join(dir, 'a'));
+    assert.deepStrictEqual(findServerJsons(dir), ['z/server.json']);
+  });
+
+  it('a root that is itself under a dot-directory still walks', () => {
+    const nested = path.join(outside, '.work', 'servers');
+    fs.mkdirSync(path.join(nested, 'srv'), {recursive: true});
+    fs.writeFileSync(path.join(nested, 'srv', 'server.json'), '{}');
+    assert.deepStrictEqual(findServerJsons(nested), ['srv/server.json']);
   });
 });

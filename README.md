@@ -45,7 +45,11 @@ metering, identity hand-off, audit and a validated tool contract.
 
 ## Install and quick start
 
-Two npm packages, both Node ≥ 24.15:
+Two npm packages, both Node ≥ 24.15. They are not published to npm yet; until
+they are, run them from a clone of this repository after `npm ci`, as
+`node packages/service/bin/countinghouse-registry.js` and
+`node packages/cli/bin/countinghouse-registry-cli.js` in place of the
+commands below.
 
 - **`countinghouse-registry`**, the service. It stores everything in one
   SQLite file, and `docs/operator.md` covers its config, keys and claims.
