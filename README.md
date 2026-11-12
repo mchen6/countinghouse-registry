@@ -27,7 +27,8 @@ metering, identity hand-off, audit and a validated tool contract.
   catalogue is mirrored, entry for entry, so any MCP client that can use the
   official registry can use this one today. The registry *is* the catalogue;
   there is no "import" of a server into it.
-- **Those servers usable through countinghouse itself, immediately.** The
+- **Those servers usable through countinghouse itself, once its remote MCP
+  client lands (RC1-min, in progress; not merged yet).** Then the
   operator enables an entry and countinghouse serves its tools through its
   gateway, with per-key access, metering, identity hand-off and audit, with
   no conversion and no manual ceremony: the tool surface is validated and its
